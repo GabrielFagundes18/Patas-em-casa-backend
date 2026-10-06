@@ -6,6 +6,7 @@ const { getPermissionMatrix } = require('../src/config/permissions');
 
 const ROLE_LABELS = {
   administrador: 'Administrador (Super Admin)',
+  gestor_ong: 'Gestor da ONG',
   gestor_animais: 'Gestor de animais (Veterinário/Cuidador)',
   financeiro: 'Financeiro (Atendimento e Doações)',
   voluntariado: 'Voluntariado (Voluntário)',

@@ -77,6 +77,13 @@ test('permission checks use the central role matrix', () => {
   assert.equal(hasPermission('gestor_animais', 'animals:delete'), false);
   assert.equal(hasPermission('financeiro', 'lgpd:approve'), false);
   assert.equal(hasPermission('voluntariado', 'donations:write'), false);
+  // Gestor da ONG: toda a operação, menos equipe/acessos e decisões LGPD.
+  assert.equal(hasPermission('gestor_ong', 'animals:delete'), true);
+  assert.equal(hasPermission('gestor_ong', 'adoptions:approve'), true);
+  assert.equal(hasPermission('gestor_ong', 'donations:update'), true);
+  assert.equal(hasPermission('gestor_ong', 'stories:delete'), true);
+  assert.equal(hasPermission('gestor_ong', 'team:read'), false);
+  assert.equal(hasPermission('gestor_ong', 'lgpd:approve'), false);
   assert.equal(hasPermission('cargo_inexistente', 'animals:read'), false);
   assert.deepEqual(getPermissionsForRole('cargo_inexistente'), []);
 });

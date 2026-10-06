@@ -9,7 +9,7 @@ const withTransaction = require('../../db/transaction');
 const triageRepository = require('../../repositories/adoptions/adoption-triage-repository');
 const auditService = require('../audit/audit-service');
 const defaultMailer = require('../email/mailer');
-const { buildAppointmentEmail } = require('../email/appointment-email');
+const { buildAppointmentEmail } = require('../email/adoption-emails');
 
 const OPEN_STATUSES = adoptionRequest.openStatus;
 const APPOINTMENT_LABELS = { visita: 'Visita', entrevista: 'Entrevista' };

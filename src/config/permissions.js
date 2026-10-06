@@ -14,10 +14,21 @@ const moduleActions = Object.freeze({
   team: ['read', 'create', 'update'],
 });
 
-// Cargos do banco: administrador (Super Admin), gestor_animais (Veterinário/Cuidador),
-// financeiro (Atendimento e Doações) e voluntariado (Voluntário).
+// Cargos do banco: administrador (Super Admin), gestor_ong (Gestor da ONG), gestor_animais
+// (Veterinário/Cuidador), financeiro (Atendimento e Doações) e voluntariado (Voluntário).
 const roleMatrix = Object.freeze({
   administrador: moduleActions,
+  // Toda a operação da ONG, menos equipe/acessos e as decisões LGPD (anonimizar/excluir titular),
+  // que são irreversíveis e ficam com o administrador.
+  gestor_ong: {
+    dashboard: ['read'],
+    animals: ['read', 'create', 'update', 'delete', 'export'],
+    adoptions: ['read', 'update', 'approve'],
+    adopters: ['read', 'update', 'reveal', 'export'],
+    donations: ['read', 'create', 'update', 'export'],
+    volunteers: ['read', 'create', 'update', 'delete'],
+    stories: ['read', 'create', 'update', 'delete'],
+  },
   gestor_animais: {
     dashboard: ['read'],
     animals: ['read', 'create', 'update', 'export'],

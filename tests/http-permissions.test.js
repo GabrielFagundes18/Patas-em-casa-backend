@@ -77,7 +77,7 @@ test('the permission matrix is available to administrators', async () => {
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.ok(body.data.modules.some((module) => module.module === 'animals' && module.actions.includes('export')));
-  assert.deepEqual(body.data.roles.map((role) => role.role), ['administrador', 'gestor_animais', 'financeiro', 'voluntariado']);
+  assert.deepEqual(body.data.roles.map((role) => role.role), ['administrador', 'gestor_ong', 'gestor_animais', 'financeiro', 'voluntariado']);
 });
 
 test('session refresh requires the anti-CSRF header and a valid cookie', async () => {

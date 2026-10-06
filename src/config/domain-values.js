@@ -38,6 +38,6 @@ module.exports = {
     ],
   },
   user: {
-    roles: ['administrador', 'gestor_animais', 'financeiro', 'voluntariado'],
+    roles: ['administrador', 'gestor_ong', 'gestor_animais', 'financeiro', 'voluntariado'],
   },
 };

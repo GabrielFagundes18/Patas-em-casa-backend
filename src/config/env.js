@@ -64,6 +64,28 @@ function readEmailConfig(env) {
   });
 }
 
+function readUrl(value, name) {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+    return url.origin + url.pathname.replace(/\/+$/, '');
+  } catch (error) {
+    throw new Error(`${name} deve ser uma URL http(s) válida.`);
+  }
+}
+
+// Mercado Pago é opcional: sem o token de acesso, as rotas de doação online respondem 503.
+function readMercadoPagoConfig(env) {
+  if (!env.MERCADOPAGO_ACCESS_TOKEN) return null;
+  if (!env.MERCADOPAGO_WEBHOOK_SECRET) {
+    throw new Error('Informe MERCADOPAGO_WEBHOOK_SECRET (assinatura secreta dos webhooks) junto com MERCADOPAGO_ACCESS_TOKEN.');
+  }
+  return Object.freeze({
+    accessToken: env.MERCADOPAGO_ACCESS_TOKEN,
+    webhookSecret: env.MERCADOPAGO_WEBHOOK_SECRET,
+  });
+}
+
 function readConfig(env = process.env) {
   const nodeEnv = env.NODE_ENV || 'development';
   const port = Number(env.PORT || DEFAULT_PORT);
@@ -118,7 +140,16 @@ function readConfig(env = process.env) {
     if (!env.CORS_ORIGIN || corsOrigins.length === 0) {
       throw new Error('CORS_ORIGIN é obrigatória em produção.');
     }
+
+    if (!env.API_PUBLIC_URL) {
+      throw new Error('API_PUBLIC_URL é obrigatória em produção (endereço público da API, usado nas URLs das fotos).');
+    }
   }
+
+  // Links enviados por e-mail apontam para o site; fotos enviadas são servidas pela própria API.
+  const frontendUrl = readUrl(env.FRONTEND_URL || corsOrigins[0] || 'http://localhost:3000', 'FRONTEND_URL');
+  const apiPublicUrl = readUrl(env.API_PUBLIC_URL || `http://localhost:${port}`, 'API_PUBLIC_URL');
+  const uploadDir = env.UPLOAD_DIR || 'uploads';
 
   return Object.freeze({
     nodeEnv,
@@ -131,6 +162,10 @@ function readConfig(env = process.env) {
     sessionMaxHours,
     trustProxy,
     email: readEmailConfig(env),
+    frontendUrl,
+    apiPublicUrl,
+    uploadDir,
+    mercadoPago: readMercadoPagoConfig(env),
   });
 }
 
