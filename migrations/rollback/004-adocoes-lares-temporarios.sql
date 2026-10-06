@@ -6,7 +6,6 @@ DROP TABLE IF EXISTS lares_temporarios;
 DROP TABLE IF EXISTS pos_adocao_midias;
 DROP TABLE IF EXISTS pos_adocao_contatos;
 DROP TABLE IF EXISTS pedidos_adocao_documentos;
-DROP TABLE IF EXISTS pedidos_adocao_agendamentos;
 
 DROP INDEX IF EXISTS uq_pedidos_adocao_protocolo;
 

@@ -37,8 +37,8 @@ jobs:
         run: find src scripts server.js -name '*.js' -exec node --check {} +
       - name: Testes unitários e HTTP
         run: npm test
-      - name: Schema base no banco de teste
-        run: psql "postgresql://patas:patas@localhost:5432/patas_teste" -v ON_ERROR_STOP=1 -f migrations/000-patas-em-casa-schema.sql
+      - name: Migrations no banco de teste
+        run: npm run db:migrate
       - name: Testes de integração
         run: npm run test:integration
       - name: Imagem Docker

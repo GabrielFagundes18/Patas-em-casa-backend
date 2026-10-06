@@ -9,24 +9,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_pedidos_adocao_protocolo
   ON pedidos_adocao (protocolo)
   WHERE protocolo IS NOT NULL;
 
-CREATE TABLE pedidos_adocao_agendamentos (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  pedido_id uuid NOT NULL REFERENCES pedidos_adocao(id) ON DELETE CASCADE,
-  tipo varchar(20) NOT NULL CHECK (tipo IN ('entrevista', 'visita')),
-  status varchar(20) NOT NULL DEFAULT 'agendado'
-    CHECK (status IN ('agendado', 'realizado', 'cancelado')),
-  previsto_em timestamptz NOT NULL,
-  responsavel_id uuid REFERENCES usuarios(id) ON DELETE SET NULL,
-  anotacoes text,
-  criado_em timestamptz NOT NULL DEFAULT now(),
-  atualizado_em timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_pedidos_agendamentos_data_status
-  ON pedidos_adocao_agendamentos (previsto_em, status);
-
-CREATE INDEX idx_pedidos_agendamentos_responsavel
-  ON pedidos_adocao_agendamentos (responsavel_id, previsto_em);
+-- pedidos_adocao_agendamentos foi para a migration 011 (agenda-adocao).
 
 CREATE TABLE pedidos_adocao_documentos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

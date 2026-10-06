@@ -1,19 +1,18 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
 const bcrypt = require('bcryptjs');
 require('../../src/config/env');
 const pool = require('../../src/db/db');
 const app = require('../../src/app');
 const { withRollback } = require('../helpers/db-transaction');
+const { readOrder } = require('../../scripts/migrar');
 
 const PASSWORD = 'Integracao-Teste-123';
 const NEW_PASSWORD = 'Integracao-Nova-456';
 const EMAIL_SUFFIX = '.integracao@example.invalid';
-// INTEGRACAO_BANCO_VAZIO=1 roda os fluxos num schema vazio criado pelo 000 (como no CI).
+// INTEGRACAO_BANCO_VAZIO=1 roda os fluxos num schema vazio criado pelas migrations de migrations/ordem.json.
 const freshSchemaSql = process.env.INTEGRACAO_BANCO_VAZIO === '1'
-  ? fs.readFileSync(path.join(__dirname, '..', '..', 'migrations', '000-patas-em-casa-schema.sql'), 'utf8')
+  ? readOrder().map((migration) => migration.sql).join('\n')
   : undefined;
 
 // Todos os fluxos rodam no banco real dentro de uma transação desfeita ao final (withRollback).

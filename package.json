@@ -10,7 +10,8 @@
     "build": "echo \"Backend Node.js não exige build.\"",
     "definir-senha": "node scripts/definir-senha.js",
     "test:integration": "node --test --test-concurrency=1 tests/integration/*.test.js",
-    "docs:permissoes": "node scripts/gerar-doc-permissoes.js"
+    "docs:permissoes": "node scripts/gerar-doc-permissoes.js",
+    "db:migrate": "node scripts/migrar.js"
   },
   "keywords": [],
   "author": "",

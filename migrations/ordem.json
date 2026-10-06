@@ -1,0 +1,11 @@
+{
+  "descricao": "Migrations aplicadas por scripts/migrar.js, nesta ordem. As propostas 001–008 ficam de fora até serem aprovadas.",
+  "aplicar": [
+    "000-patas-em-casa-schema.sql",
+    "009-perfil-gestor-ong.sql",
+    "010-sessoes-e-redefinicao-senha.sql",
+    "011-agenda-adocao.sql",
+    "012-fotos-temperamento-animais.sql",
+    "013-doacoes-mercado-pago.sql"
+  ]
+}

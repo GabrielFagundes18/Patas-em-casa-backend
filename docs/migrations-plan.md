@@ -2,7 +2,31 @@
 
 ## Estado
 
-Os arquivos abaixo sao propostas para revisao. Nenhum foi aplicado. O banco nao deve ser alterado ate aprovacao explicita.
+- `000` está aplicada no Neon.
+- `009` a `013` são usadas pela API atual e precisam ser aplicadas **antes** de publicar essa versão
+  (veja "Como aplicar"). Foram testadas em banco local descartável, com reversão.
+- `001` a `008` continuam propostas para revisão: nenhuma foi aplicada. As partes delas que a API passou a
+  usar (sessões, redefinição de senha, fotos, temperamento, agenda e webhooks) foram movidas para 010–013.
+
+## Como aplicar (`npm run db:migrate`)
+
+`scripts/migrar.js` aplica, em ordem, os arquivos de `migrations/ordem.json`, cada um numa transação, e
+registra nome e checksum em `schema_migrations`. Arquivo já aplicado não pode mudar (o script recusa).
+
+1. Criar branch Neon de segurança.
+2. No banco que já tem a 000 (Neon): `npm run db:migrate -- --baseline 000-patas-em-casa-schema.sql` (uma vez).
+3. `npm run db:migrate -- --status` para conferir e `npm run db:migrate` para aplicar as pendentes.
+4. Publicar a API nova só depois disso.
+
+| Arquivo | Escopo | Reversão |
+| --- | --- | --- |
+| `009-perfil-gestor-ong.sql` | Cargo `gestor_ong` (Gestor da ONG) | `rollback/009-...` (falha se houver usuários com o cargo) |
+| `010-sessoes-e-redefinicao-senha.sql` | Sessões revogáveis; links de redefinição e convite | `rollback/010-...` (encerra todas as sessões) |
+| `011-agenda-adocao.sql` | Agenda de visitas/entrevistas; data preferida do adotante | `rollback/011-...` |
+| `012-fotos-temperamento-animais.sql` | Galeria de fotos (`animais_midias`) e `temperamento` | `rollback/012-...` (não apaga arquivos) |
+| `013-doacoes-mercado-pago.sql` | Status `falhou`, assinaturas, ids do gateway, webhooks | `rollback/013-...` |
+
+## Propostas (não aplicadas)
 
 ## Ordem proposta
 
@@ -38,7 +62,8 @@ Os arquivos abaixo sao propostas para revisao. Nenhum foi aplicado. O banco nao 
 ## Pendências que dependem de decisão
 
 - **Cargo `atendimento`** e **status de animal `em_tratamento` / `lar_temporario`**: exigem recriar as restrições
-  `usuarios_cargo_check` e `animais_status_check` mantendo todos os valores atuais (migração 009, a criar após aprovação).
+  `usuarios_cargo_check` e `animais_status_check` mantendo todos os valores atuais (nova migração, após aprovação;
+  a 009 já recriou `usuarios_cargo_check` para o cargo `gestor_ong`).
   Enquanto isso, a API usa os cargos e status atuais; `financeiro` cumpre o papel de Atendimento e Doações.
 - **Pedido de adoção pelo site**: hoje não muda o status do animal (premissa). Se o animal deve ir para `em_processo`
   ao receber o primeiro pedido, a regra entra em `src/services/adoptions/adoption-request-service.js`.

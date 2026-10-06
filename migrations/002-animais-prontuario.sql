@@ -3,29 +3,10 @@
 -- em_tratamento e lar_temporario na aplicacao. Este draft nao remove constraints existentes.
 -- Rollback correspondente: migrations/rollback/002-animais-prontuario.sql.
 
+-- temperamento e animais_midias foram para a migration 012 (fotos-temperamento-animais).
 ALTER TABLE animais
-  ADD COLUMN IF NOT EXISTS temperamento jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS necessidades_especiais text,
   ADD COLUMN IF NOT EXISTS historia_resgate text;
-
-CREATE TABLE animais_midias (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  animal_id uuid NOT NULL REFERENCES animais(id) ON DELETE CASCADE,
-  tipo varchar(10) NOT NULL CHECK (tipo IN ('foto', 'video')),
-  objeto_chave varchar(500) NOT NULL UNIQUE,
-  mime_type varchar(100) NOT NULL,
-  tamanho_bytes bigint NOT NULL CHECK (tamanho_bytes > 0),
-  ordem integer NOT NULL DEFAULT 0 CHECK (ordem >= 0),
-  principal boolean NOT NULL DEFAULT false,
-  criado_em timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_animais_midias_ordem
-  ON animais_midias (animal_id, ordem, criado_em);
-
-CREATE UNIQUE INDEX uq_animais_midia_principal
-  ON animais_midias (animal_id)
-  WHERE principal = true AND tipo = 'foto';
 
 CREATE TABLE animais_status_historico (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -54,52 +54,8 @@ CREATE INDEX idx_desafios_2fa_expiracao
   ON desafios_2fa (expira_em)
   WHERE usado_em IS NULL;
 
-CREATE TABLE sessoes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  dispositivo varchar(200),
-  ip inet NOT NULL,
-  agente_usuario text,
-  criado_em timestamptz NOT NULL DEFAULT now(),
-  ultimo_uso_em timestamptz NOT NULL DEFAULT now(),
-  expira_em timestamptz NOT NULL,
-  revogado_em timestamptz
-);
-
-CREATE INDEX idx_sessoes_usuario_ativas
-  ON sessoes (usuario_id, ultimo_uso_em DESC)
-  WHERE revogado_em IS NULL;
-
-CREATE INDEX idx_sessoes_expiracao
-  ON sessoes (expira_em)
-  WHERE revogado_em IS NULL;
-
-CREATE TABLE tokens_renovacao (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  sessao_id uuid NOT NULL REFERENCES sessoes(id) ON DELETE CASCADE,
-  token_hash bytea NOT NULL UNIQUE,
-  criado_em timestamptz NOT NULL DEFAULT now(),
-  expira_em timestamptz NOT NULL,
-  revogado_em timestamptz,
-  substituido_por uuid REFERENCES tokens_renovacao(id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_tokens_renovacao_sessao_ativos
-  ON tokens_renovacao (sessao_id, expira_em)
-  WHERE revogado_em IS NULL;
-
-CREATE TABLE tokens_redefinicao_acesso (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  usuario_id uuid NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
-  token_hash bytea NOT NULL UNIQUE,
-  criado_em timestamptz NOT NULL DEFAULT now(),
-  expira_em timestamptz NOT NULL,
-  usado_em timestamptz
-);
-
-CREATE INDEX idx_tokens_redefinicao_pendentes
-  ON tokens_redefinicao_acesso (expira_em)
-  WHERE usado_em IS NULL;
+-- sessoes, tokens_renovacao e tokens_redefinicao_acesso foram para a migration 010
+-- (sessoes-e-redefinicao-senha), já usada pela API.
 
 CREATE TABLE auditoria_eventos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

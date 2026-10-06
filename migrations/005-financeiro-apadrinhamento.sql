@@ -81,23 +81,4 @@ CREATE INDEX idx_necessidades_publicas_status
   ON necessidades_fisicas (status, prioridade)
   WHERE publicado = true;
 
-CREATE TABLE gateway_webhook_eventos (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  provedor varchar(60) NOT NULL,
-  evento_externo_id varchar(200) NOT NULL,
-  doacao_id uuid REFERENCES doacoes(id) ON DELETE SET NULL,
-  payload_cifrado bytea NOT NULL,
-  payload_nonce bytea NOT NULL,
-  payload_tag_autenticacao bytea NOT NULL,
-  versao_chave smallint NOT NULL CHECK (versao_chave > 0),
-  status varchar(20) NOT NULL DEFAULT 'recebido'
-    CHECK (status IN ('recebido', 'processando', 'processado', 'falhou')),
-  codigo_erro varchar(80),
-  recebido_em timestamptz NOT NULL DEFAULT now(),
-  processado_em timestamptz,
-  CONSTRAINT uq_gateway_evento_provedor_id UNIQUE (provedor, evento_externo_id)
-);
-
-CREATE INDEX idx_gateway_webhook_eventos_reprocessamento
-  ON gateway_webhook_eventos (recebido_em)
-  WHERE status = 'falhou';
+-- gateway_webhook_eventos foi para a migration 013 (doacoes-mercado-pago).

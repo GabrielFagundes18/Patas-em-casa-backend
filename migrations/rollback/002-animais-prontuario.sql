@@ -6,9 +6,7 @@ DROP TABLE IF EXISTS animais_medicacoes;
 DROP TABLE IF EXISTS animais_procedimentos_veterinarios;
 DROP TABLE IF EXISTS animais_vacinas;
 DROP TABLE IF EXISTS animais_status_historico;
-DROP TABLE IF EXISTS animais_midias;
 
 ALTER TABLE animais
   DROP COLUMN IF EXISTS historia_resgate,
-  DROP COLUMN IF EXISTS necessidades_especiais,
-  DROP COLUMN IF EXISTS temperamento;
+  DROP COLUMN IF EXISTS necessidades_especiais;
