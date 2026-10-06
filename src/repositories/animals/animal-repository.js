@@ -1,4 +1,5 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 
 const SORT_COLUMNS = Object.freeze({
   nome: 'nome',
@@ -9,30 +10,26 @@ const SORT_COLUMNS = Object.freeze({
   porte: 'porte',
 });
 
+const UPDATABLE_COLUMNS = new Set([
+  'nome', 'especie', 'raca', 'sexo', 'idade_anos', 'porte', 'status',
+  'descricao', 'foto_url', 'data_entrada', 'castrado', 'vacinado',
+]);
+
 function buildWhere(filters) {
-  const conditions = [];
-  const values = [];
+  const where = createWhere();
 
-  function addCondition(sql, value) {
-    values.push(value);
-    conditions.push(sql.replaceAll('?', `$${values.length}`));
-  }
+  if (filters.q) where.add("(nome ILIKE ? OR COALESCE(raca, '') ILIKE ?)", `%${filters.q}%`);
+  if (filters.especie) where.add('especie = ?', filters.especie);
+  if (filters.sexo) where.add('sexo = ?', filters.sexo);
+  if (filters.porte) where.add('porte = ?', filters.porte);
+  if (filters.status) where.add('status = ?', filters.status);
+  if (filters.statusIn?.length) where.add('status = ANY(?::varchar[])', filters.statusIn);
+  if (filters.castrado !== undefined) where.add('castrado = ?', filters.castrado);
+  if (filters.vacinado !== undefined) where.add('vacinado = ?', filters.vacinado);
+  if (filters.idadeMin !== undefined) where.add('idade_anos >= ?', filters.idadeMin);
+  if (filters.idadeMax !== undefined) where.add('idade_anos <= ?', filters.idadeMax);
 
-  if (filters.q) addCondition("(nome ILIKE ? OR COALESCE(raca, '') ILIKE ?)", `%${filters.q}%`);
-  if (filters.especie) addCondition('especie = ?', filters.especie);
-  if (filters.sexo) addCondition('sexo = ?', filters.sexo);
-  if (filters.porte) addCondition('porte = ?', filters.porte);
-  if (filters.status) addCondition('status = ?', filters.status);
-  if (filters.statusIn?.length) addCondition('status = ANY(?::varchar[])', filters.statusIn);
-  if (filters.castrado !== undefined) addCondition('castrado = ?', filters.castrado);
-  if (filters.vacinado !== undefined) addCondition('vacinado = ?', filters.vacinado);
-  if (filters.idadeMin !== undefined) addCondition('idade_anos >= ?', filters.idadeMin);
-  if (filters.idadeMax !== undefined) addCondition('idade_anos <= ?', filters.idadeMax);
-
-  return {
-    clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
-    values,
-  };
+  return { clause: where.clause(), values: where.values };
 }
 
 async function list(filters) {
@@ -107,22 +104,14 @@ async function create(animal) {
 }
 
 async function update(id, changes) {
-  const allowedColumns = new Set([
-    'nome', 'especie', 'raca', 'sexo', 'idade_anos', 'porte', 'status',
-    'descricao', 'foto_url', 'data_entrada', 'castrado', 'vacinado',
-  ]);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return findById(id);
-
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return findById(id);
 
   const result = await pool.query(
-    `UPDATE animais SET ${assignments.join(', ')} WHERE id = $${values.length}
+    `UPDATE animais SET ${update.set} WHERE id = ${update.idParam}
      RETURNING id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
                foto_url, data_entrada, castrado, vacinado, criado_em, atualizado_em`,
-    values
+    update.values
   );
   return result.rows[0] || null;
 }

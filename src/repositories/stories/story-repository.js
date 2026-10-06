@@ -1,4 +1,5 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 
 const SELECT_STORY = `
   SELECT h.id, h.autor_nome, h.texto, h.foto_url, h.publicado, h.criado_em,
@@ -7,20 +8,16 @@ const SELECT_STORY = `
   LEFT JOIN animais a ON a.id = h.animal_id
   LEFT JOIN adotantes d ON d.id = h.adotante_id`;
 
+const UPDATABLE_COLUMNS = new Set(['autor_nome', 'texto', 'foto_url', 'publicado', 'animal_id', 'adotante_id']);
+
 function buildWhere(filters) {
-  const conditions = [];
-  const values = [];
+  const where = createWhere();
 
-  function addCondition(sql, value) {
-    values.push(value);
-    conditions.push(sql.replaceAll('?', `$${values.length}`));
-  }
+  if (filters.q) where.add('(h.autor_nome ILIKE ? OR h.texto ILIKE ?)', `%${filters.q}%`);
+  if (filters.publicado !== undefined) where.add('h.publicado = ?', filters.publicado);
+  if (filters.animalId) where.add('h.animal_id = ?', filters.animalId);
 
-  if (filters.q) addCondition('(h.autor_nome ILIKE ? OR h.texto ILIKE ?)', `%${filters.q}%`);
-  if (filters.publicado !== undefined) addCondition('h.publicado = ?', filters.publicado);
-  if (filters.animalId) addCondition('h.animal_id = ?', filters.animalId);
-
-  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', values };
+  return { clause: where.clause(), values: where.values };
 }
 
 async function list(filters) {
@@ -55,15 +52,10 @@ async function create(story) {
 }
 
 async function update(id, changes) {
-  const allowedColumns = new Set(['autor_nome', 'texto', 'foto_url', 'publicado', 'animal_id', 'adotante_id']);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return findById(id);
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return findById(id);
 
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
-
-  const result = await pool.query(`UPDATE historias SET ${assignments.join(', ')} WHERE id = $${values.length}`, values);
+  const result = await pool.query(`UPDATE historias SET ${update.set} WHERE id = ${update.idParam}`, update.values);
   return result.rowCount > 0 ? findById(id) : null;
 }
 

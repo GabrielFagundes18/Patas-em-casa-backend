@@ -1,4 +1,5 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 const { adoptionRequest } = require('../../config/domain-values');
 
 const SORT_COLUMNS = Object.freeze({
@@ -11,31 +12,24 @@ const SORT_COLUMNS = Object.freeze({
 const ANONYMIZED_NAME = 'Titular anonimizado';
 const REMOVED_TEXT = '[conteúdo removido a pedido do titular (LGPD)]';
 
-function buildWhere(filters) {
-  const conditions = [];
-  const values = [];
+const UPDATABLE_COLUMNS = new Set(['nome', 'email', 'telefone', 'cidade', 'estado', 'endereco', 'status']);
 
-  function addCondition(sql, value) {
-    values.push(value);
-    conditions.push(sql.replaceAll('?', `$${values.length}`));
-  }
+function buildWhere(filters) {
+  const where = createWhere();
 
   if (filters.q) {
     const digits = filters.q.replace(/\D/g, '');
-    values.push(`%${filters.q}%`);
-    const textIndex = values.length;
-    let phoneCondition = '';
-    if (digits.length >= 4) {
-      values.push(`%${digits}%`);
-      phoneCondition = ` OR regexp_replace(COALESCE(d.telefone, ''), '\\D', '', 'g') LIKE $${values.length}`;
-    }
-    conditions.push(`(d.nome ILIKE $${textIndex} OR d.email ILIKE $${textIndex}${phoneCondition})`);
+    const text = where.param(`%${filters.q}%`);
+    const phoneCondition = digits.length >= 4
+      ? ` OR regexp_replace(COALESCE(d.telefone, ''), '\\D', '', 'g') LIKE ${where.param(`%${digits}%`)}`
+      : '';
+    where.addRaw(`(d.nome ILIKE ${text} OR d.email ILIKE ${text}${phoneCondition})`);
   }
-  if (filters.status) addCondition('d.status = ?', filters.status);
-  if (filters.cidade) addCondition('d.cidade ILIKE ?', filters.cidade);
-  if (filters.estado) addCondition('d.estado = ?', filters.estado);
+  if (filters.status) where.add('d.status = ?', filters.status);
+  if (filters.cidade) where.add('d.cidade ILIKE ?', filters.cidade);
+  if (filters.estado) where.add('d.estado = ?', filters.estado);
 
-  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', values };
+  return { clause: where.clause(), values: where.values };
 }
 
 const SELECT_WITH_COUNTS = `
@@ -114,18 +108,13 @@ async function findHistory(db = pool, id) {
 }
 
 async function update(id, changes) {
-  const allowedColumns = new Set(['nome', 'email', 'telefone', 'cidade', 'estado', 'endereco', 'status']);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return findById(pool, id);
-
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return findById(pool, id);
 
   const result = await pool.query(
-    `UPDATE adotantes SET ${assignments.join(', ')} WHERE id = $${values.length}
+    `UPDATE adotantes SET ${update.set} WHERE id = ${update.idParam}
      RETURNING id, nome, email, telefone, cidade, estado, endereco, status, criado_em`,
-    values
+    update.values
   );
   return result.rows[0] || null;
 }

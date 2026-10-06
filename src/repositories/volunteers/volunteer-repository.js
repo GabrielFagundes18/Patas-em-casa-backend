@@ -1,4 +1,5 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 
 const SORT_COLUMNS = Object.freeze({
   nome: 'v.nome',
@@ -13,22 +14,18 @@ const SELECT_VOLUNTEER = `
   FROM voluntarios v
   LEFT JOIN voluntario_areas va ON va.voluntario_id = v.id`;
 
+const UPDATABLE_COLUMNS = new Set(['nome', 'email', 'telefone', 'status', 'data_inicio']);
+
 function buildWhere(filters) {
-  const conditions = [];
-  const values = [];
+  const where = createWhere();
 
-  function addCondition(sql, value) {
-    values.push(value);
-    conditions.push(sql.replaceAll('?', `$${values.length}`));
-  }
-
-  if (filters.q) addCondition('(v.nome ILIKE ? OR v.email ILIKE ?)', `%${filters.q}%`);
-  if (filters.status) addCondition('v.status = ?', filters.status);
+  if (filters.q) where.add('(v.nome ILIKE ? OR v.email ILIKE ?)', `%${filters.q}%`);
+  if (filters.status) where.add('v.status = ?', filters.status);
   if (filters.area) {
-    addCondition('EXISTS (SELECT 1 FROM voluntario_areas x WHERE x.voluntario_id = v.id AND x.area = ?)', filters.area);
+    where.add('EXISTS (SELECT 1 FROM voluntario_areas x WHERE x.voluntario_id = v.id AND x.area = ?)', filters.area);
   }
 
-  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', values };
+  return { clause: where.clause(), values: where.values };
 }
 
 async function list(filters) {
@@ -70,15 +67,10 @@ async function create(db, volunteer) {
 }
 
 async function update(db, id, changes) {
-  const allowedColumns = new Set(['nome', 'email', 'telefone', 'status', 'data_inicio']);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return true;
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return true;
 
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
-
-  const result = await db.query(`UPDATE voluntarios SET ${assignments.join(', ')} WHERE id = $${values.length}`, values);
+  const result = await db.query(`UPDATE voluntarios SET ${update.set} WHERE id = ${update.idParam}`, update.values);
   return result.rowCount > 0;
 }
 

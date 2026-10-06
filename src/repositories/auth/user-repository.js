@@ -1,7 +1,9 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 
 const PUBLIC_COLUMNS = 'id, nome, email, cargo, ativo, criado_em';
 const SORT_COLUMNS = Object.freeze({ nome: 'nome', email: 'email', cargo: 'cargo', criado_em: 'criado_em' });
+const UPDATABLE_COLUMNS = new Set(['nome', 'email', 'cargo', 'ativo']);
 
 async function findByEmail(email) {
   const result = await pool.query(
@@ -37,23 +39,13 @@ async function findByIdWithPassword(id) {
 }
 
 async function list(filters) {
-  const conditions = [];
-  const values = [];
+  const where = createWhere();
+  if (filters.q) where.add('(nome ILIKE ? OR email ILIKE ?)', `%${filters.q}%`);
+  if (filters.cargo) where.add('cargo = ?', filters.cargo);
+  if (filters.ativo !== undefined) where.add('ativo = ?', filters.ativo);
 
-  if (filters.q) {
-    values.push(`%${filters.q}%`);
-    conditions.push(`(nome ILIKE $${values.length} OR email ILIKE $${values.length})`);
-  }
-  if (filters.cargo) {
-    values.push(filters.cargo);
-    conditions.push(`cargo = $${values.length}`);
-  }
-  if (filters.ativo !== undefined) {
-    values.push(filters.ativo);
-    conditions.push(`ativo = $${values.length}`);
-  }
-
-  const clause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const clause = where.clause();
+  const { values } = where;
   const sortColumn = SORT_COLUMNS[filters.sort] || SORT_COLUMNS.nome;
   const sortOrder = filters.order === 'desc' ? 'DESC' : 'ASC';
 
@@ -80,18 +72,13 @@ async function create(user) {
 }
 
 async function update(id, changes) {
-  const allowedColumns = new Set(['nome', 'email', 'cargo', 'ativo']);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return findById(id);
-
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return findById(id);
 
   const result = await pool.query(
-    `UPDATE usuarios SET ${assignments.join(', ')} WHERE id = $${values.length}
+    `UPDATE usuarios SET ${update.set} WHERE id = ${update.idParam}
      RETURNING ${PUBLIC_COLUMNS}`,
-    values
+    update.values
   );
   return result.rows[0] || null;
 }

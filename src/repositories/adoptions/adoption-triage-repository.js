@@ -1,4 +1,5 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 const { adoptionRequest } = require('../../config/domain-values');
 
 const SELECT_REQUEST = `
@@ -22,26 +23,24 @@ const SORT_EXPRESSIONS = Object.freeze({
   prioridade: "CASE p.prioridade WHEN 'alto' THEN 1 WHEN 'medio' THEN 2 ELSE 3 END",
 });
 
+const UPDATABLE_COLUMNS = new Set([
+  'status', 'prioridade', 'responsavel_id', 'observacoes', 'termo_assinado', 'termo_assinado_em',
+]);
+
 function buildWhere(filters) {
-  const conditions = [];
-  const values = [];
+  const where = createWhere();
 
-  function addCondition(sql, value) {
-    values.push(value);
-    conditions.push(sql.replaceAll('?', `$${values.length}`));
-  }
+  if (filters.status?.length) where.add('p.status = ANY(?::varchar[])', filters.status);
+  if (filters.prioridade) where.add('p.prioridade = ?', filters.prioridade);
+  if (filters.responsavelId) where.add('p.responsavel_id = ?', filters.responsavelId);
+  if (filters.semResponsavel) where.addRaw('p.responsavel_id IS NULL');
+  if (filters.animalId) where.add('p.animal_id = ?', filters.animalId);
+  if (filters.adotanteId) where.add('p.adotante_id = ?', filters.adotanteId);
+  if (filters.q) where.add('(d.nome ILIKE ? OR a.nome ILIKE ?)', `%${filters.q}%`);
+  if (filters.de) where.add('p.data_pedido >= ?::date', filters.de);
+  if (filters.ate) where.add("p.data_pedido < ?::date + interval '1 day'", filters.ate);
 
-  if (filters.status?.length) addCondition('p.status = ANY(?::varchar[])', filters.status);
-  if (filters.prioridade) addCondition('p.prioridade = ?', filters.prioridade);
-  if (filters.responsavelId) addCondition('p.responsavel_id = ?', filters.responsavelId);
-  if (filters.semResponsavel) conditions.push('p.responsavel_id IS NULL');
-  if (filters.animalId) addCondition('p.animal_id = ?', filters.animalId);
-  if (filters.adotanteId) addCondition('p.adotante_id = ?', filters.adotanteId);
-  if (filters.q) addCondition('(d.nome ILIKE ? OR a.nome ILIKE ?)', `%${filters.q}%`);
-  if (filters.de) addCondition('p.data_pedido >= ?::date', filters.de);
-  if (filters.ate) addCondition("p.data_pedido < ?::date + interval '1 day'", filters.ate);
-
-  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', values };
+  return { clause: where.clause(), values: where.values };
 }
 
 async function list(filters) {
@@ -77,17 +76,10 @@ async function findById(db = pool, id, { forUpdate = false } = {}) {
 }
 
 async function update(db, id, changes) {
-  const allowedColumns = new Set([
-    'status', 'prioridade', 'responsavel_id', 'observacoes', 'termo_assinado', 'termo_assinado_em',
-  ]);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return;
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return;
 
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
-
-  await db.query(`UPDATE pedidos_adocao SET ${assignments.join(', ')} WHERE id = $${values.length}`, values);
+  await db.query(`UPDATE pedidos_adocao SET ${update.set} WHERE id = ${update.idParam}`, update.values);
 }
 
 async function lockAnimal(db, animalId) {

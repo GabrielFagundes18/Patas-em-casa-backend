@@ -1,4 +1,5 @@
 const pool = require('../../db/db');
+const { buildUpdate, createWhere } = require('../../db/sql');
 
 const SORT_COLUMNS = Object.freeze({
   data: 'd.data',
@@ -13,24 +14,20 @@ const SELECT_DONATION = `
   FROM doacoes d
   LEFT JOIN adotantes a ON a.id = d.adotante_id`;
 
+const UPDATABLE_COLUMNS = new Set(['adotante_id', 'doador_nome', 'doador_email', 'tipo', 'valor', 'metodo', 'status', 'data']);
+
 function buildWhere(filters) {
-  const conditions = [];
-  const values = [];
+  const where = createWhere();
 
-  function addCondition(sql, value) {
-    values.push(value);
-    conditions.push(sql.replaceAll('?', `$${values.length}`));
-  }
+  if (filters.q) where.add("(d.doador_nome ILIKE ? OR COALESCE(d.doador_email, '') ILIKE ?)", `%${filters.q}%`);
+  if (filters.tipo) where.add('d.tipo = ?', filters.tipo);
+  if (filters.metodo) where.add('d.metodo = ?', filters.metodo);
+  if (filters.status) where.add('d.status = ?', filters.status);
+  if (filters.adotanteId) where.add('d.adotante_id = ?', filters.adotanteId);
+  if (filters.de) where.add('d.data >= ?::date', filters.de);
+  if (filters.ate) where.add("d.data < ?::date + interval '1 day'", filters.ate);
 
-  if (filters.q) addCondition("(d.doador_nome ILIKE ? OR COALESCE(d.doador_email, '') ILIKE ?)", `%${filters.q}%`);
-  if (filters.tipo) addCondition('d.tipo = ?', filters.tipo);
-  if (filters.metodo) addCondition('d.metodo = ?', filters.metodo);
-  if (filters.status) addCondition('d.status = ?', filters.status);
-  if (filters.adotanteId) addCondition('d.adotante_id = ?', filters.adotanteId);
-  if (filters.de) addCondition('d.data >= ?::date', filters.de);
-  if (filters.ate) addCondition("d.data < ?::date + interval '1 day'", filters.ate);
-
-  return { clause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', values };
+  return { clause: where.clause(), values: where.values };
 }
 
 async function list(filters) {
@@ -84,17 +81,12 @@ async function create(donation) {
 }
 
 async function update(id, changes) {
-  const allowedColumns = new Set(['adotante_id', 'doador_nome', 'doador_email', 'tipo', 'valor', 'metodo', 'status', 'data']);
-  const entries = Object.entries(changes).filter(([column]) => allowedColumns.has(column));
-  if (entries.length === 0) return findById(id);
-
-  const assignments = entries.map(([column], index) => `${column} = $${index + 1}`);
-  const values = entries.map(([, value]) => value);
-  values.push(id);
+  const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
+  if (!update) return findById(id);
 
   const result = await pool.query(
-    `UPDATE doacoes SET ${assignments.join(', ')} WHERE id = $${values.length} RETURNING id`,
-    values
+    `UPDATE doacoes SET ${update.set} WHERE id = ${update.idParam} RETURNING id`,
+    update.values
   );
   return result.rowCount > 0 ? findById(id) : null;
 }
