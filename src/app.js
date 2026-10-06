@@ -15,6 +15,7 @@ const volunteersRouter = require('./router/router-volunteers');
 const storiesRouter = require('./router/router-stories');
 const usersRouter = require('./router/router-users');
 const permissionsRouter = require('./router/router-permissions');
+const webhooksRouter = require('./router/router-webhooks');
 const securityHeaders = require('./middleware/security-headers');
 const requestContext = require('./middleware/request-context');
 const rateLimit = require('./middleware/rate-limit');
@@ -60,6 +61,7 @@ app.use('/api/v1/volunteers', volunteersRouter);
 app.use('/api/v1/stories', storiesRouter);
 app.use('/api/v1/users', usersRouter);
 app.use('/api/v1/permissions', permissionsRouter);
+app.use('/api/v1/webhooks', webhooksRouter);
 
 app.use((req, res, next) => {
   return next(new AppError(404, 'ROTA_NAO_ENCONTRADA', 'A rota solicitada não foi encontrada.'));

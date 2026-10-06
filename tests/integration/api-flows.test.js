@@ -14,6 +14,7 @@ const app = require('../../src/app');
 const { withRollback } = require('../helpers/db-transaction');
 const { readOrder } = require('../../scripts/migrar');
 const accessLinks = require('../../src/services/auth/access-link-service');
+const { createOnlineDonationService } = require('../../src/services/donations/online-donation-service');
 
 const PASSWORD = 'Integracao-Teste-123';
 const NEW_PASSWORD = 'Integracao-Nova-456';
@@ -388,6 +389,62 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         await request('PATCH', `/api/v1/donations/${id}`, { body: { status: 'cancelada' } });
         const locked = await request('PATCH', `/api/v1/donations/${id}`, { body: { valor: 10 } });
         assert.equal(locked.data.error.code, 'DOACAO_CANCELADA');
+      });
+
+      await t.test('doações online: SQL real com gateway simulado, status público e painel', async () => {
+        // Sem credenciais no ambiente de teste, as rotas públicas respondem 503.
+        const unavailable = await request('POST', '/api/v1/public/donations/checkout', {
+          auth: false, body: { valor: 20, nome: 'Ana Doadora', email: 'ana@example.invalid', tipo: 'unica' },
+        });
+        assert.equal(unavailable.status, 503);
+        assert.equal(unavailable.data.error.code, 'PAGAMENTO_INDISPONIVEL');
+
+        const remote = { payments: new Map(), preapprovals: new Map(), charges: new Map() };
+        const online = createOnlineDonationService({
+          config: { frontendUrl: 'https://patas.example', apiPublicUrl: 'https://api.patas.example', mercadoPago: { accessToken: 'TEST-x', webhookSecret: 'x' } },
+          gateway: {
+            createPreference: async () => ({ id: 'pref', init_point: 'https://mp/checkout' }),
+            createPreapproval: async () => ({ id: 'pre-int', init_point: 'https://mp/assinatura' }),
+            getPayment: async (id) => remote.payments.get(id),
+            getPreapproval: async (id) => remote.preapprovals.get(id),
+            getAuthorizedPayment: async (id) => remote.charges.get(id),
+            cancelPreapproval: async () => {},
+          },
+          mailer: { isConfigured: () => false },
+          audit: { record: async () => {} },
+        });
+        const { createHmac } = require('node:crypto');
+        const sign = (id, requestId) => ({
+          'x-request-id': requestId,
+          'x-signature': `ts=1,v1=${createHmac('sha256', 'x').update(`id:${id};request-id:${requestId};ts:1;`).digest('hex')}`,
+        });
+
+        const once = await online.startCheckout({ valor: 42.5, nome: 'Ana Doadora', email: 'ana@example.invalid', tipo: 'unica' });
+        remote.payments.set('5551', { id: 5551, status: 'approved', payment_type_id: 'ticket', external_reference: once.referencia });
+        await online.handleWebhook({ headers: sign('5551', 'r1'), query: { 'data.id': '5551', type: 'payment' }, body: { id: 'int-n1' } });
+        const publicStatus = await request('GET', `/api/v1/public/donations/status/${once.referencia}`, { auth: false });
+        assert.deepEqual(publicStatus.data.data, { tipo: 'unica', status: 'confirmada', valor: 42.5 });
+
+        const viaPanel = await request('GET', `/api/v1/donations/${once.referencia}`);
+        assert.equal(viaPanel.data.data.metodo, 'boleto');
+        assert.equal(viaPanel.data.data.gateway, 'mercado_pago');
+        const manualEdit = await request('PATCH', `/api/v1/donations/${once.referencia}`, { body: { valor: 1 } });
+        assert.equal(manualEdit.status, 409);
+        assert.equal(manualEdit.data.error.code, 'DOACAO_ONLINE');
+
+        const monthly = await online.startCheckout({ valor: 25, nome: 'Caio Mensal', email: 'caio@example.invalid', tipo: 'recorrente' });
+        remote.preapprovals.set('pre-int', { id: 'pre-int', status: 'authorized', external_reference: monthly.referencia });
+        await online.handleWebhook({ headers: sign('pre-int', 'r2'), query: { 'data.id': 'pre-int', type: 'subscription_preapproval' }, body: { id: 'int-n2' } });
+        remote.charges.set('ap-int', { id: 'ap-int', preapproval_id: 'pre-int', transaction_amount: 25, payment: { id: 6001, status: 'approved' } });
+        for (const requestId of ['r3', 'r4']) {
+          await online.handleWebhook({ headers: sign('ap-int', requestId), query: { 'data.id': 'ap-int', type: 'subscription_authorized_payment' }, body: { id: `int-${requestId}` } });
+        }
+
+        const subscriptions = await request('GET', '/api/v1/donations/subscriptions?status=ativa');
+        const listed = subscriptions.data.data.find((item) => item.id === monthly.referencia);
+        assert.deepEqual([listed.status, listed.pagamentos_confirmados, listed.total_arrecadado], ['ativa', 1, 25]);
+        const cancelled = await request('POST', `/api/v1/donations/subscriptions/${monthly.referencia}/cancel`);
+        assert.equal(cancelled.status, 503);
       });
 
       await t.test('voluntários: áreas em transação, inscrição pública idempotente e exclusão', async () => {

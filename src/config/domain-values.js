@@ -21,7 +21,7 @@ module.exports = {
   donation: {
     type: ['unica', 'recorrente'],
     method: ['pix', 'cartao', 'boleto', 'transferencia'],
-    status: ['pendente', 'confirmada', 'cancelada'],
+    status: ['pendente', 'confirmada', 'cancelada', 'falhou'],
   },
   volunteer: {
     status: ['ativo', 'inativo'],

@@ -893,7 +893,7 @@ paths:
         - $ref: '#/components/parameters/Q'
         - { name: tipo, in: query, schema: { type: string, enum: [unica, recorrente] } }
         - { name: metodo, in: query, schema: { type: string, enum: [pix, cartao, boleto, transferencia] } }
-        - { name: status, in: query, schema: { type: string, enum: [pendente, confirmada, cancelada] } }
+        - { name: status, in: query, schema: { type: string, enum: [pendente, confirmada, cancelada, falhou] } }
         - { name: adotante_id, in: query, schema: { type: string, format: uuid } }
         - $ref: '#/components/parameters/De'
         - $ref: '#/components/parameters/Ate'
@@ -947,6 +947,28 @@ paths:
       description: 'Permissão: donations:export. Mesmos filtros da listagem. Auditado.'
       responses:
         '200': { $ref: '#/components/responses/Csv' }
+  /api/v1/donations/subscriptions:
+    get:
+      tags: [Doações]
+      summary: Doações mensais (assinaturas do Mercado Pago) com total arrecadado
+      description: 'Permissão: donations:read.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - { name: status, in: query, schema: { type: string, enum: [pendente, ativa, pausada, cancelada] } }
+      responses:
+        '200': { description: 'Lista paginada: id, doador_nome, doador_email, valor, status, pagamentos_confirmados, total_arrecadado' }
+  /api/v1/donations/subscriptions/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Doações]
+      summary: Cancelar doação mensal (cancela também no Mercado Pago)
+      description: 'Permissão: donations:update. 503 sem credenciais do Mercado Pago. Auditado.'
+      responses:
+        '200': { description: Assinatura cancelada }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { description: PAGAMENTO_INDISPONIVEL }
   /api/v1/donations/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -1183,6 +1205,86 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/public/donations/checkout:
+    post:
+      tags: [Público]
+      summary: Iniciar doação online (única ou mensal) no Mercado Pago
+      description: |
+        Única: cria a doação "pendente" e uma preferência do Checkout Pro (Pix, cartão ou boleto). Mensal: cria a
+        assinatura "pendente" e um preapproval. Devolve checkout_url para redirecionar o doador. Dados de cartão
+        nunca passam pela API. O status chega pelo webhook. 503 PAGAMENTO_INDISPONIVEL sem MERCADOPAGO_ACCESS_TOKEN.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valor, nome, email, tipo]
+              properties:
+                valor: { type: number, minimum: 5, maximum: 10000 }
+                nome: { type: string, maxLength: 150 }
+                email: { type: string, format: email }
+                tipo: { type: string, enum: [unica, recorrente] }
+                website: { type: string, description: 'Armadilha para robôs: deve ficar vazio' }
+      responses:
+        '201': { description: '{ tipo, referencia, checkout_url }' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502': { description: GATEWAY_INDISPONIVEL }
+        '503': { description: PAGAMENTO_INDISPONIVEL }
+  /api/v1/public/donations/status/{ref}:
+    parameters:
+      - { name: ref, in: path, required: true, schema: { type: string, format: uuid }, description: Referência devolvida no checkout }
+    get:
+      tags: [Público]
+      summary: Situação de uma doação online (página de retorno)
+      description: Só tipo, status e valor; nenhum dado pessoal.
+      security: []
+      responses:
+        '200': { description: '{ tipo, status, valor }' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/public/donations/subscriptions/cancel-link:
+    post:
+      tags: [Público]
+      summary: Pedir por e-mail o link para cancelar a doação mensal
+      description: Resposta sempre 202 (não revela se o e-mail tem assinatura). Link válido por 7 dias. Exige SMTP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+      responses:
+        '202': { description: '{ mensagem }' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/public/donations/subscriptions/cancel:
+    post:
+      tags: [Público]
+      summary: Cancelar a doação mensal pelo link recebido por e-mail
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [token], properties: { token: { type: string } } }
+      responses:
+        '200': { description: '{ status: cancelada, valor }' }
+        '400': { description: LINK_INVALIDO }
+  /api/v1/webhooks/mercadopago:
+    post:
+      tags: [Público]
+      summary: Webhook do Mercado Pago (pagamentos, assinaturas e cobranças mensais)
+      description: |
+        Sem login: valida o cabeçalho x-signature (HMAC-SHA256 com MERCADOPAGO_WEBHOOK_SECRET sobre
+        "id:<data.id>;request-id:<x-request-id>;ts:<ts>;"). Tipos tratados: payment, subscription_preapproval,
+        subscription_authorized_payment. O estado é sempre consultado na API do Mercado Pago; notificações
+        repetidas são ignoradas. Erro no processamento devolve 500 para o Mercado Pago reenviar.
+      security: []
+      responses:
+        '200': { description: '{ status: processado | ignorado | duplicado }' }
+        '401': { description: ASSINATURA_INVALIDA }
+        '503': { description: PAGAMENTO_INDISPONIVEL }
   /api/v1/public/volunteers:
     post:
       tags: [Público]
@@ -1571,7 +1673,7 @@ components:
         tipo: { type: string, enum: [unica, recorrente] }
         valor: { type: number, example: 42.5 }
         metodo: { type: string, enum: [pix, cartao, boleto, transferencia], nullable: true }
-        status: { type: string, enum: [pendente, confirmada, cancelada] }
+        status: { type: string, enum: [pendente, confirmada, cancelada, falhou] }
         data: { type: string, format: date-time }
     DonationInput:
       type: object
@@ -1581,7 +1683,7 @@ components:
         tipo: { type: string, enum: [unica, recorrente] }
         valor: { type: number, exclusiveMinimum: true, minimum: 0, description: Até duas casas decimais }
         metodo: { type: string, enum: [pix, cartao, boleto, transferencia], nullable: true }
-        status: { type: string, enum: [pendente, confirmada, cancelada] }
+        status: { type: string, enum: [pendente, confirmada, cancelada, falhou] }
         data: { type: string, format: date-time, description: Não pode estar no futuro }
         adotante_id: { type: string, format: uuid, nullable: true }
     DonationEnvelope:

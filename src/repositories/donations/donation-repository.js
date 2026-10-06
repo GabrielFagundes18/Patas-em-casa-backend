@@ -10,7 +10,7 @@ const SORT_COLUMNS = Object.freeze({
 
 const SELECT_DONATION = `
   SELECT d.id, d.adotante_id, a.nome AS adotante_nome, d.doador_nome, d.doador_email,
-         d.tipo, d.valor, d.metodo, d.status, d.data
+         d.tipo, d.valor, d.metodo, d.status, d.data, d.gateway, d.gateway_status, d.assinatura_id
   FROM doacoes d
   LEFT JOIN adotantes a ON a.id = d.adotante_id`;
 

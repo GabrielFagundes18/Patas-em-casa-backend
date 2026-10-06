@@ -32,6 +32,10 @@ Preencha o `.env` (todas as variáveis estão comentadas no `.env.example`):
 | `TRUST_PROXY` | atrás de proxy | Nº de proxies confiáveis, para o limite de taxa usar o IP real |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | para e-mails | Servidor que envia o aviso de visita/entrevista ao adotante. Sem `SMTP_HOST`, o agendamento funciona e o painel avisa que o e-mail não saiu |
 | `EMAIL_FROM` / `EMAIL_REPLY_TO` | não | Remetente exibido (padrão: `SMTP_USER`) e endereço para as respostas |
+| `FRONTEND_URL` | não | Endereço do site nos links dos e-mails (padrão: primeira origem de `CORS_ORIGIN`) |
+| `API_PUBLIC_URL` | em produção | Endereço público da API, usado nas URLs das fotos enviadas |
+| `UPLOAD_DIR` | não | Pasta das fotos enviadas (padrão `uploads`; no Docker, volume em `/app/uploads`) |
+| `MERCADOPAGO_ACCESS_TOKEN` / `MERCADOPAGO_WEBHOOK_SECRET` | para doação online | Credencial da aplicação e assinatura secreta dos webhooks (`<API_PUBLIC_URL>/api/v1/webhooks/mercadopago`) |
 
 Em desenvolvimento, segredos ausentes viram valores aleatórios a cada início (as sessões caem quando o servidor
 reinicia); defina-os no `.env` para evitar isso. A aplicação valida as variáveis ao iniciar e falha com mensagem clara.
@@ -43,6 +47,7 @@ reinicia); defina-os no `.env` para evitar isso. A aplicação valida as variáv
 | `npm run dev` | Sobe a API com recarga automática (porta 4000) |
 | `npm start` | Sobe a API em modo produção |
 | `npm test` | Testes unitários e HTTP (sem banco) |
+| `npm run db:migrate` | Aplica as migrations de `migrations/ordem.json` (`--status`, `--baseline <arquivo>`) |
 | `npm run test:integration` | Fluxos completos no banco do `.env`, dentro de uma transação desfeita ao final |
 | `INTEGRACAO_BANCO_VAZIO=1 npm run test:integration` | Os mesmos fluxos num schema vazio criado pelo `000` (como no CI) |
 | `npm run definir-senha -- email@ong.org` | Define a senha de um usuário do painel (digitação mascarada) |

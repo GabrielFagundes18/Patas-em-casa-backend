@@ -7,6 +7,12 @@ const { validateIdParam, listQueryDetails } = require('../validators/common-vali
 const { validateListAnimals } = require('../validators/animals/animal-validators');
 const validateAdoptionRequest = require('../validators/adoptions/adoption-request-validator');
 const { validateVolunteerApplication } = require('../validators/volunteers/volunteer-validators');
+const ControllerOnlineDonations = require('../controller/controller-online-donations');
+const {
+  validateCancelByToken,
+  validateCancelLinkRequest,
+  validateCheckout,
+} = require('../validators/donations/online-donation-validators');
 
 // Rotas sem login: só dados públicos. Formulários têm limite de envios por IP.
 const router = express.Router();
@@ -20,5 +26,9 @@ router.get('/adoption-steps', asyncHandler(ControllerPublic.listAdoptionSteps));
 router.get('/stats', asyncHandler(ControllerPublic.getStats));
 router.post('/adoption-requests', publicFormRateLimit, validateRequest(validateAdoptionRequest), asyncHandler(ControllerPublic.createAdoptionRequest));
 router.post('/volunteers', publicFormRateLimit, validateRequest(validateVolunteerApplication), asyncHandler(ControllerPublic.applyAsVolunteer));
+router.post('/donations/checkout', publicFormRateLimit, validateRequest(validateCheckout), asyncHandler(ControllerOnlineDonations.checkout));
+router.get('/donations/status/:ref', asyncHandler(ControllerOnlineDonations.status));
+router.post('/donations/subscriptions/cancel-link', publicFormRateLimit, validateRequest(validateCancelLinkRequest), asyncHandler(ControllerOnlineDonations.requestCancelLink));
+router.post('/donations/subscriptions/cancel', publicFormRateLimit, validateRequest(validateCancelByToken), asyncHandler(ControllerOnlineDonations.cancelByToken));
 
 module.exports = router;

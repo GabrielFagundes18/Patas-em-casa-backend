@@ -84,6 +84,10 @@ function createDonationService(repository = donationRepository, { audit = auditS
     if (current.status === 'cancelada') {
       throw new AppError(409, 'DOACAO_CANCELADA', 'Doações canceladas não podem ser alteradas; registre uma nova doação.');
     }
+    // Doação online: o estado vem do Mercado Pago (webhooks); edição manual criaria divergência.
+    if (current.gateway) {
+      throw new AppError(409, 'DOACAO_ONLINE', 'Doações online são atualizadas automaticamente pelo Mercado Pago.');
+    }
 
     const changes = Object.fromEntries(Object.entries(payload).filter(([field]) => EDITABLE_FIELDS.includes(field)));
     if (typeof changes.doador_nome === 'string') changes.doador_nome = changes.doador_nome.trim();
