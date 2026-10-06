@@ -75,6 +75,25 @@ function createAdoptionTriageService(repository = triageRepository, {
   mailer = defaultMailer,
   log = logger,
 } = {}) {
+  async function findRequest(id) {
+    const request = await repository.findById(undefined, id);
+    if (!request) throw notFound();
+    return request;
+  }
+
+  // Trava a linha do pedido (FOR UPDATE) até o fim da transação: duas ações simultâneas não se sobrepõem.
+  async function lockRequest(db, id) {
+    const request = await repository.findById(db, id, { forUpdate: true });
+    if (!request) throw notFound();
+    return request;
+  }
+
+  async function lockOpenRequest(db, id) {
+    const request = await lockRequest(db, id);
+    if (!OPEN_STATUSES.includes(request.status)) throw alreadyDecided();
+    return request;
+  }
+
   // Sem outros pedidos abertos, o candidato deixa de estar "em análise".
   async function releaseAdopter(db, request) {
     if (!['em_analise', 'visita_agendada'].includes(request.adotante_status)) return;
@@ -122,14 +141,12 @@ function createAdoptionTriageService(repository = triageRepository, {
   }
 
   async function getById(id) {
-    const request = await repository.findById(undefined, id);
-    if (!request) throw notFound();
+    const request = await findRequest(id);
     return toDetail(request);
   }
 
   async function reveal(id, actor = {}) {
-    const request = await repository.findById(undefined, id);
-    if (!request) throw notFound();
+    const request = await findRequest(id);
 
     await audit.record({
       actor,
@@ -152,8 +169,7 @@ function createAdoptionTriageService(repository = triageRepository, {
 
   async function update(id, payload, actor = {}) {
     return transaction(async (db) => {
-      const current = await repository.findById(db, id, { forUpdate: true });
-      if (!current) throw notFound();
+      const current = await lockRequest(db, id);
 
       const changesTriage = ['status', 'prioridade', 'responsavel_id'].some((field) => Object.hasOwn(payload, field));
       if (!OPEN_STATUSES.includes(current.status) && changesTriage) throw alreadyDecided();
@@ -207,9 +223,7 @@ function createAdoptionTriageService(repository = triageRepository, {
 
   async function approve(id, { justificativa }, actor = {}) {
     return transaction(async (db) => {
-      const current = await repository.findById(db, id, { forUpdate: true });
-      if (!current) throw notFound();
-      if (!OPEN_STATUSES.includes(current.status)) throw alreadyDecided();
+      const current = await lockOpenRequest(db, id);
 
       const animal = await repository.lockAnimal(db, current.animal_id);
       if (animal.status === 'adotado') {
@@ -262,9 +276,7 @@ function createAdoptionTriageService(repository = triageRepository, {
 
   async function reject(id, { justificativa }, actor = {}) {
     return transaction(async (db) => {
-      const current = await repository.findById(db, id, { forUpdate: true });
-      if (!current) throw notFound();
-      if (!OPEN_STATUSES.includes(current.status)) throw alreadyDecided();
+      const current = await lockOpenRequest(db, id);
 
       const animal = await repository.lockAnimal(db, current.animal_id);
       await repository.update(db, id, {
@@ -327,9 +339,7 @@ function createAdoptionTriageService(repository = triageRepository, {
     const { diaSemana, data, hora } = describeBrasiliaDateTime(appointment.dataHora);
 
     const scheduled = await transaction(async (db) => {
-      const current = await repository.findById(db, id, { forUpdate: true });
-      if (!current) throw notFound();
-      if (!OPEN_STATUSES.includes(current.status)) throw alreadyDecided();
+      const current = await lockOpenRequest(db, id);
 
       // Visita move o pedido para "visita agendada"; entrevista só tira o pedido de "novo".
       const nextStatus = appointment.tipo === 'visita'
@@ -369,7 +379,7 @@ function createAdoptionTriageService(repository = triageRepository, {
     // O resultado do envio também vai para o histórico, para a equipe saber se o adotante foi avisado.
     try {
       const updated = await transaction(async (db) => {
-        const current = await repository.findById(db, id, { forUpdate: true });
+        const current = await lockRequest(db, id);
         const note = email.enviado
           ? 'E-mail com o agendamento enviado ao adotante.'
           : `E-mail com o agendamento não enviado. ${email.motivo}`;
@@ -385,8 +395,7 @@ function createAdoptionTriageService(repository = triageRepository, {
 
   async function markTermSigned(id, actor = {}) {
     return transaction(async (db) => {
-      const current = await repository.findById(db, id, { forUpdate: true });
-      if (!current) throw notFound();
+      const current = await lockRequest(db, id);
       if (current.status !== 'aprovado') {
         throw new AppError(409, 'PEDIDO_NAO_APROVADO', 'O termo só pode ser marcado como assinado em pedidos aprovados.');
       }
