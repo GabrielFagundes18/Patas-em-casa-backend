@@ -37,6 +37,18 @@ exports.schedule = async (req, res) => {
   return res.json(successResponse(await triageService.schedule(req.params.id, req.body, auditContext(req))));
 };
 
+exports.reschedule = async (req, res) => {
+  return res.json(successResponse(await triageService.reschedule(req.params.id, req.params.appointmentId, req.body, auditContext(req))));
+};
+
+exports.cancelAppointment = async (req, res) => {
+  return res.json(successResponse(await triageService.cancelAppointment(req.params.id, req.params.appointmentId, req.body, auditContext(req))));
+};
+
+exports.completeAppointment = async (req, res) => {
+  return res.json(successResponse(await triageService.completeAppointment(req.params.id, req.params.appointmentId, auditContext(req))));
+};
+
 exports.markTermSigned = async (req, res) => {
   return res.json(successResponse(await triageService.markTermSigned(req.params.id, auditContext(req))));
 };

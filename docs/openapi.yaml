@@ -624,8 +624,10 @@ paths:
       tags: [Pedidos de adoção]
       summary: Agendar visita ou entrevista e avisar o adotante por e-mail
       description: |
-        Permissão: adoptions:update. Só para pedidos abertos. Visita move o pedido para visita_agendada;
-        entrevista tira o pedido de "novo" (vai para em_analise). O compromisso fica no histórico do pedido.
+        Permissão: adoptions:update. Só para pedidos abertos. Grava o compromisso na agenda (com responsável e
+        duração) e no histórico. Visita move o pedido para visita_agendada; entrevista tira o pedido de "novo".
+        Conflito: o mesmo responsável não pode ter compromissos sobrepostos (409 HORARIO_INDISPONIVEL).
+        Responsável padrão: o do pedido ou, sem ele, quem agenda.
         Com enviar_email=true, o adotante recebe um e-mail (SMTP do .env) depois de gravar; se o envio falhar
         ou o SMTP não estiver configurado, o agendamento continua salvo e "email.enviado" volta false. Auditado.
       requestBody:
@@ -641,6 +643,72 @@ paths:
               schema: { $ref: '#/components/schemas/ScheduleResultEnvelope' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/adoption-requests/{id}/appointments/{appointmentId}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - { name: appointmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Pedidos de adoção]
+      summary: Remarcar visita/entrevista
+      description: 'Permissão: adoptions:update. Pedido aberto e compromisso ainda agendado; verifica conflito de novo. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data_hora]
+              properties:
+                data_hora: { type: string, example: '2026-10-12T15:00' }
+                duracao_minutos: { type: integer, minimum: 15, maximum: 480 }
+                local: { type: string, maxLength: 300 }
+                mensagem: { type: string, maxLength: 1000 }
+                enviar_email: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Remarcado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResultEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/adoption-requests/{id}/appointments/{appointmentId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - { name: appointmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Pedidos de adoção]
+      summary: Cancelar visita/entrevista
+      description: 'Permissão: adoptions:update. Cancelar a única visita ativa devolve o pedido para em_analise. Auditado.'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                motivo: { type: string, maxLength: 500, description: Vai no histórico e, com enviar_email, no e-mail }
+                enviar_email: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Cancelado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppointmentResultEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/adoption-requests/{id}/appointments/{appointmentId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - { name: appointmentId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Pedidos de adoção]
+      summary: Marcar visita/entrevista como realizada
+      description: 'Permissão: adoptions:update. Auditado.'
+      responses:
+        '200': { description: '{ pedido }' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /api/v1/adoption-requests/{id}/term-signed:
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -1355,6 +1423,9 @@ components:
             - type: object
               properties:
                 observacoes: { type: string, nullable: true, description: Histórico de anotações com contatos mascarados }
+                visita_preferida_em: { type: string, nullable: true, description: 'Data/hora sugerida pelo adotante (Brasília, AAAA-MM-DDTHH:mm)' }
+                agendamentos: { type: array, items: { $ref: '#/components/schemas/Appointment' } }
+                email: { type: object, nullable: true, description: 'Só em aprovar/reprovar: resultado do e-mail ao adotante' }
         meta: { type: object }
     AdoptionRequestList:
       type: object
@@ -1365,7 +1436,9 @@ components:
       type: object
       required: [justificativa]
       properties:
-        justificativa: { type: string, minLength: 10, maxLength: 2000 }
+        justificativa: { type: string, minLength: 10, maxLength: 2000, description: Interna; não vai para o adotante }
+        notificar_adotante: { type: boolean, default: false, description: Envia e-mail ao adotante com a decisão }
+        mensagem_adotante: { type: string, maxLength: 1000, description: Mensagem incluída no e-mail ao adotante }
     Schedule:
       type: object
       required: [tipo, data_hora]
@@ -1375,18 +1448,38 @@ components:
         local: { type: string, maxLength: 300, description: Endereço ou link da chamada }
         mensagem: { type: string, maxLength: 1000, description: Mensagem da equipe incluída no e-mail }
         enviar_email: { type: boolean, default: false }
+        duracao_minutos: { type: integer, minimum: 15, maximum: 480, default: 60 }
+        responsavel_id: { type: string, format: uuid, description: Membro da equipe de adoções que conduz o compromisso }
+    Appointment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tipo: { type: string, enum: [visita, entrevista] }
+        status: { type: string, enum: [agendado, realizado, cancelado] }
+        previsto_em: { type: string, format: date-time }
+        data_hora: { type: string, example: '2026-10-10T14:00', description: Mesmo instante no horário de Brasília }
+        duracao_minutos: { type: integer }
+        local: { type: string, nullable: true }
+        mensagem: { type: string, nullable: true }
+        responsavel: { type: object, nullable: true, properties: { id: { type: string }, nome: { type: string } } }
+    AppointmentResultEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            pedido: { type: object, description: Pedido completo (mesmo formato de GET /adoption-requests/{id}) }
+            agendamento: { $ref: '#/components/schemas/Appointment' }
+            email: { type: object, nullable: true, properties: { enviado: { type: boolean }, para: { type: string }, motivo: { type: string } } }
+        meta: { type: object }
     ScheduleResultEnvelope:
       type: object
       properties:
         data:
           type: object
           properties:
-            pedido:
-              allOf:
-                - $ref: '#/components/schemas/AdoptionRequestSummary'
-                - type: object
-                  properties:
-                    observacoes: { type: string, nullable: true }
+            pedido: { type: object, description: Pedido completo (mesmo formato de GET /adoption-requests/{id}) }
+            agendamento: { $ref: '#/components/schemas/Appointment' }
             email:
               type: object
               nullable: true
@@ -1518,6 +1611,7 @@ components:
         ambiente_seguro: { type: boolean, enum: [true] }
         ciente_pos_adocao: { type: boolean, enum: [true] }
         website: { type: string, description: 'Armadilha para robôs: deve ficar vazio' }
+        visita_preferida_em: { type: string, example: '2026-10-10T10:00', description: 'Opcional: data/hora preferida para a visita (Brasília), no futuro' }
     DashboardSummary:
       type: object
       properties:

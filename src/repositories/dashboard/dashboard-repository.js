@@ -101,20 +101,29 @@ async function recentRequests(limit) {
   return result.rows;
 }
 
-// Agenda possível com o schema atual: pedidos em "visita agendada" (sem data marcada,
-// que chega com a migração 004) e termos de adoção pendentes de assinatura.
+// Agenda: visitas e entrevistas marcadas (pela data do compromisso) e termos de adoção pendentes
+// de assinatura (pela data da aprovação). Compromissos vencidos há mais de 1 dia saem da lista.
 async function agenda(limit) {
   const result = await pool.query(
-    `SELECT p.id AS pedido_id,
-            CASE WHEN p.status = 'visita_agendada' THEN 'visita' ELSE 'termo_pendente' END AS tipo,
-            p.atualizado_em AS referencia_em,
-            a.nome AS animal_nome, d.nome AS adotante_nome, u.nome AS responsavel_nome
-     FROM pedidos_adocao p
-     JOIN animais a ON a.id = p.animal_id
-     JOIN adotantes d ON d.id = p.adotante_id
-     LEFT JOIN usuarios u ON u.id = p.responsavel_id
-     WHERE p.status = 'visita_agendada' OR (p.status = 'aprovado' AND p.termo_assinado = false)
-     ORDER BY p.atualizado_em ASC
+    `SELECT * FROM (
+       SELECT ag.id, ag.pedido_id, ag.tipo, ag.previsto_em AS referencia_em,
+              a.nome AS animal_nome, d.nome AS adotante_nome, u.nome AS responsavel_nome
+       FROM pedidos_adocao_agendamentos ag
+       JOIN pedidos_adocao p ON p.id = ag.pedido_id
+       JOIN animais a ON a.id = p.animal_id
+       JOIN adotantes d ON d.id = p.adotante_id
+       LEFT JOIN usuarios u ON u.id = ag.responsavel_id
+       WHERE ag.status = 'agendado' AND ag.previsto_em >= now() - interval '1 day'
+       UNION ALL
+       SELECT p.id, p.id AS pedido_id, 'termo_pendente' AS tipo, p.atualizado_em AS referencia_em,
+              a.nome, d.nome, u.nome
+       FROM pedidos_adocao p
+       JOIN animais a ON a.id = p.animal_id
+       JOIN adotantes d ON d.id = p.adotante_id
+       LEFT JOIN usuarios u ON u.id = p.responsavel_id
+       WHERE p.status = 'aprovado' AND p.termo_assinado = false
+     ) itens
+     ORDER BY referencia_em ASC
      LIMIT $1`,
     [limit]
   );

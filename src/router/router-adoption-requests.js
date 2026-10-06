@@ -5,9 +5,12 @@ const { requireAuth, requirePermission } = require('../middleware/auth');
 const validateRequest = require('../middleware/validate-request');
 const { validateIdParam } = require('../validators/common-validators');
 const {
+  validateAppointmentParams,
   validateBoard,
+  validateCancelAppointment,
   validateDecision,
   validateListRequests,
+  validateReschedule,
   validateSchedule,
   validateUpdateRequest,
 } = require('../validators/adoptions/adoption-triage-validators');
@@ -24,6 +27,9 @@ router.patch('/:id', requirePermission('adoptions:update'), validateRequest(vali
 router.post('/:id/approve', requirePermission('adoptions:approve'), validateRequest(validateIdParam), validateRequest(validateDecision), asyncHandler(ControllerAdoptionRequests.approve));
 router.post('/:id/reject', requirePermission('adoptions:approve'), validateRequest(validateIdParam), validateRequest(validateDecision), asyncHandler(ControllerAdoptionRequests.reject));
 router.post('/:id/schedule', requirePermission('adoptions:update'), validateRequest(validateIdParam), validateRequest(validateSchedule), asyncHandler(ControllerAdoptionRequests.schedule));
+router.patch('/:id/appointments/:appointmentId', requirePermission('adoptions:update'), validateRequest(validateAppointmentParams), validateRequest(validateReschedule), asyncHandler(ControllerAdoptionRequests.reschedule));
+router.post('/:id/appointments/:appointmentId/cancel', requirePermission('adoptions:update'), validateRequest(validateAppointmentParams), validateRequest(validateCancelAppointment), asyncHandler(ControllerAdoptionRequests.cancelAppointment));
+router.post('/:id/appointments/:appointmentId/complete', requirePermission('adoptions:update'), validateRequest(validateAppointmentParams), asyncHandler(ControllerAdoptionRequests.completeAppointment));
 router.post('/:id/term-signed', requirePermission('adoptions:update'), validateRequest(validateIdParam), asyncHandler(ControllerAdoptionRequests.markTermSigned));
 
 module.exports = router;

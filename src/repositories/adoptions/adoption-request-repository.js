@@ -40,10 +40,10 @@ async function hasOpenRequest(db, adopterId, animalId) {
 
 async function insertRequest(db, request) {
   const result = await db.query(
-    `INSERT INTO pedidos_adocao (animal_id, adotante_id, observacoes)
-     VALUES ($1, $2, $3)
+    `INSERT INTO pedidos_adocao (animal_id, adotante_id, observacoes, visita_preferida_em)
+     VALUES ($1, $2, $3, $4)
      RETURNING id, status, data_pedido`,
-    [request.animalId, request.adopterId, request.observacoes]
+    [request.animalId, request.adopterId, request.observacoes, request.visitaPreferidaEm || null]
   );
   return result.rows[0];
 }

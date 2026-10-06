@@ -101,6 +101,7 @@ function createDashboardService(repository = dashboardRepository, { now = () => 
         doacoes_quantidade: Number(donationsMap.get(month)?.quantidade || 0),
       })),
       agenda: agenda.map((row) => ({
+        id: row.id,
         tipo: row.tipo,
         pedido_id: row.pedido_id,
         referencia_em: row.referencia_em,

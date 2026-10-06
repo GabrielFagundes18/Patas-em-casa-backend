@@ -24,4 +24,20 @@ function describeBrasiliaDateTime(value) {
   };
 }
 
-module.exports = { isValidBrasiliaDateTime, parseBrasiliaDateTime, describeBrasiliaDateTime };
+const partsFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+// Date → "AAAA-MM-DDTHH:mm" no horário de Brasília (o formato do <input type="datetime-local"> do painel).
+function toBrasiliaDateTime(date) {
+  const parts = Object.fromEntries(partsFormatter.formatToParts(new Date(date)).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+module.exports = { isValidBrasiliaDateTime, parseBrasiliaDateTime, describeBrasiliaDateTime, toBrasiliaDateTime };

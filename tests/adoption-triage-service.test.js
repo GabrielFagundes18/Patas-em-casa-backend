@@ -56,6 +56,41 @@ function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => fa
     findActiveUser: async (db, id) => users.get(id) || null,
   };
 
+  // Agenda em memória com a mesma regra de sobreposição do SQL (mesmo responsável, intervalos que se cruzam).
+  const appointmentRows = new Map();
+  let appointmentSeq = 0;
+  const withNames = (row) => ({ ...row, responsavel_nome: users.get(row.responsavel_id)?.nome ?? (row.responsavel_id === actor.userId ? actor.name : null) });
+  const appointments = {
+    rows: appointmentRows,
+    lockSchedule: async () => {},
+    findConflicts: async (db, { responsavelId, inicio, duracaoMinutos, excludeId }) => [...appointmentRows.values()]
+      .filter((row) => row.status === 'agendado' && row.responsavel_id === responsavelId && row.id !== excludeId
+        && row.previsto_em < new Date(inicio.getTime() + duracaoMinutos * 60000)
+        && new Date(row.previsto_em.getTime() + row.duracao_minutos * 60000) > inicio)
+      .map((row) => ({ ...withNames(row), adotante_nome: adopters.get(requests.get(row.pedido_id).adotante_id).nome })),
+    create: async (db, data) => {
+      appointmentSeq += 1;
+      const row = {
+        id: `ag-${appointmentSeq}`, pedido_id: data.pedidoId, tipo: data.tipo, status: 'agendado', previsto_em: data.previstoEm,
+        duracao_minutos: data.duracaoMinutos, local: data.local || null, mensagem: data.mensagem || null, responsavel_id: data.responsavelId,
+      };
+      appointmentRows.set(row.id, row);
+      return withNames(row);
+    },
+    findById: async (db, id) => (appointmentRows.has(id) ? withNames(appointmentRows.get(id)) : null),
+    update: async (db, id, changes) => withNames(Object.assign(appointmentRows.get(id), changes)),
+    listForRequest: async (db, pedidoId) => [...appointmentRows.values()].filter((row) => row.pedido_id === pedidoId).map(withNames),
+    countActiveVisits: async (db, pedidoId) => [...appointmentRows.values()]
+      .filter((row) => row.pedido_id === pedidoId && row.tipo === 'visita' && row.status === 'agendado').length,
+    cancelActiveForRequest: async (db, pedidoId) => {
+      let count = 0;
+      for (const row of appointmentRows.values()) {
+        if (row.pedido_id === pedidoId && row.status === 'agendado') { row.status = 'cancelado'; count += 1; }
+      }
+      return count;
+    },
+  };
+
   const audits = [];
   const service = createAdoptionTriageService(repository, {
     audit: { record: async (event) => audits.push(event) },
@@ -63,9 +98,10 @@ function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => fa
     now: () => new Date('2026-10-04T15:00:00.000Z'),
     mailer,
     log: { error: () => {} },
+    appointments,
   });
 
-  return { service, animals, adopters, requests, audits };
+  return { service, animals, adopters, requests, audits, appointments };
 }
 
 test('approving a request adopts the animal and auto-rejects the other open requests', async () => {
@@ -204,4 +240,85 @@ test('schedules must be in the future and only for open requests', async () => {
     service.schedule('pedido-1', { tipo: 'visita', data_hora: '2026-10-10T14:00' }, actor),
     { status: 409, code: 'PEDIDO_ENCERRADO' }
   );
+});
+
+test('the same person cannot have two overlapping appointments, but back-to-back slots are fine', async () => {
+  const { service } = setup();
+
+  const first = await service.schedule('pedido-1', { tipo: 'visita', data_hora: '2026-10-10T14:00', duracao_minutos: 60 }, actor);
+  assert.equal(first.agendamento.data_hora, '2026-10-10T14:00');
+  assert.equal(first.pedido.agendamentos.length, 1);
+
+  await assert.rejects(
+    service.schedule('pedido-2', { tipo: 'entrevista', data_hora: '2026-10-10T14:30' }, actor),
+    (error) => error.code === 'HORARIO_INDISPONIVEL' && /Carla já tem visita com Ana em 10\/10\/2026 às 14:00/.test(error.message)
+  );
+  const afterwards = await service.schedule('pedido-2', { tipo: 'entrevista', data_hora: '2026-10-10T15:00' }, actor);
+  assert.equal(afterwards.agendamento.tipo, 'entrevista');
+
+  const otherPerson = await service.schedule('pedido-2', {
+    tipo: 'visita', data_hora: '2026-10-10T14:30', responsavel_id: '22222222-2222-4222-8222-222222222222',
+  }, actor);
+  assert.equal(otherPerson.agendamento.responsavel.nome, 'Gestor');
+});
+
+test('rescheduling checks conflicts again, keeps the slot itself and emails the new time', async () => {
+  const sent = [];
+  const { service, requests } = setup({ mailer: { isConfigured: () => true, send: async (message) => sent.push(message) } });
+  const { agendamento } = await service.schedule('pedido-1', { tipo: 'visita', data_hora: '2026-10-10T14:00', local: 'Rua A, 1' }, actor);
+  await service.schedule('pedido-2', { tipo: 'entrevista', data_hora: '2026-10-11T10:00' }, actor);
+
+  await assert.rejects(
+    service.reschedule('pedido-1', agendamento.id, { data_hora: '2026-10-11T10:30' }, actor),
+    { code: 'HORARIO_INDISPONIVEL' }
+  );
+  const moved = await service.reschedule('pedido-1', agendamento.id, { data_hora: '2026-10-10T14:30', enviar_email: true }, actor);
+
+  assert.equal(moved.agendamento.data_hora, '2026-10-10T14:30');
+  assert.equal(moved.agendamento.local, 'Rua A, 1');
+  assert.equal(moved.email.enviado, true);
+  assert.equal(sent.at(-1).subject, 'Visita remarcada: adoção de Nino');
+  assert.match(sent.at(-1).text, /Horário: 14:30/);
+  assert.match(requests.get('pedido-1').observacoes, /Visita remarcada de 10\/10\/2026 às 14:00 para sábado, 10\/10\/2026 às 14:30\./);
+  await assert.rejects(service.reschedule('pedido-2', agendamento.id, { data_hora: '2026-10-12T10:00' }, actor), { status: 404 });
+});
+
+test('cancelling the only visit sends the request back to analysis; done appointments are closed', async () => {
+  const { service, requests, adopters } = setup();
+  const visit = await service.schedule('pedido-1', { tipo: 'visita', data_hora: '2026-10-10T14:00' }, actor);
+  assert.equal(adopters.get('adotante-1').status, 'visita_agendada');
+
+  const cancelled = await service.cancelAppointment('pedido-1', visit.agendamento.id, { motivo: 'Adotante pediu para remarcar.' }, actor);
+  assert.equal(cancelled.agendamento.status, 'cancelado');
+  assert.equal(requests.get('pedido-1').status, 'em_analise');
+  assert.equal(adopters.get('adotante-1').status, 'em_analise');
+  assert.match(requests.get('pedido-1').observacoes, /Visita de 10\/10\/2026 às 14:00 cancelada\. Motivo: Adotante pediu para remarcar\./);
+  await assert.rejects(service.cancelAppointment('pedido-1', visit.agendamento.id, {}, actor), { code: 'AGENDAMENTO_ENCERRADO' });
+
+  const interview = await service.schedule('pedido-1', { tipo: 'entrevista', data_hora: '2026-10-12T09:00' }, actor);
+  const done = await service.completeAppointment('pedido-1', interview.agendamento.id, actor);
+  assert.equal(done.pedido.agendamentos.find((item) => item.id === interview.agendamento.id).status, 'realizado');
+});
+
+test('decisions can notify the adopter without exposing the internal justification', async () => {
+  const sent = [];
+  const { service, appointments } = setup({ mailer: { isConfigured: () => true, send: async (message) => sent.push(message) } });
+  await service.schedule('pedido-2', { tipo: 'visita', data_hora: '2026-10-10T16:00' }, actor);
+
+  const rejected = await service.reject('pedido-2', {
+    justificativa: 'Família não tem tempo para o animal.',
+    notificar_adotante: true,
+    mensagem_adotante: 'Obrigada pelo carinho, Bia!',
+  }, actor);
+
+  assert.equal(rejected.status, 'reprovado');
+  assert.equal(rejected.email.enviado, true);
+  assert.equal(sent[0].subject, 'Sobre o seu pedido de adoção de Nino');
+  assert.match(sent[0].text, /Obrigada pelo carinho, Bia!/);
+  assert.doesNotMatch(sent[0].text, /não tem tempo/);
+  assert.equal([...appointments.rows.values()][0].status, 'cancelado');
+
+  const approved = await service.approve('pedido-1', { justificativa: 'Família preparada e visita aprovada.' }, actor);
+  assert.equal(approved.email, null);
+  assert.equal(sent.length, 1);
 });

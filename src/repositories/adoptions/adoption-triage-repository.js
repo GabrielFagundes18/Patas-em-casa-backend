@@ -3,7 +3,7 @@ const { buildUpdate, createWhere } = require('../../db/sql');
 const { adoptionRequest } = require('../../config/domain-values');
 
 const SELECT_REQUEST = `
-  SELECT p.id, p.status, p.prioridade, p.observacoes, p.termo_assinado, p.termo_assinado_em,
+  SELECT p.id, p.status, p.prioridade, p.observacoes, p.termo_assinado, p.termo_assinado_em, p.visita_preferida_em,
          p.data_pedido, p.atualizado_em,
          a.id AS animal_id, a.nome AS animal_nome, a.especie AS animal_especie,
          a.status AS animal_status, a.foto_url AS animal_foto_url,

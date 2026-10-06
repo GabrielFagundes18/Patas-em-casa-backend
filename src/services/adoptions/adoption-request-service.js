@@ -1,4 +1,5 @@
 const AppError = require('../../utils/app-error');
+const { parseBrasiliaDateTime } = require('../../utils/brasilia-time');
 const adoptionRequestRepository = require('../../repositories/adoptions/adoption-request-repository');
 
 const AVAILABLE_ANIMAL_STATUSES = ['disponivel', 'urgente'];
@@ -22,8 +23,15 @@ function buildObservations(request) {
   ].join('\n');
 }
 
-function createAdoptionRequestService(repository = adoptionRequestRepository) {
+function createAdoptionRequestService(repository = adoptionRequestRepository, { now = () => new Date() } = {}) {
   async function create(payload) {
+    const visitaPreferidaEm = payload.visita_preferida_em ? parseBrasiliaDateTime(payload.visita_preferida_em) : null;
+    if (visitaPreferidaEm && visitaPreferidaEm <= now()) {
+      throw new AppError(422, 'DATA_NO_PASSADO', 'Escolha uma data futura para a visita.', [
+        { field: 'visita_preferida_em', message: 'Escolha uma data futura para a visita.' },
+      ]);
+    }
+
     const request = {
       animalId: payload.animal_id,
       nome: payload.nome.trim(),
@@ -58,6 +66,7 @@ function createAdoptionRequestService(repository = adoptionRequestRepository) {
         animalId: request.animalId,
         adopterId,
         observacoes: buildObservations(request),
+        visitaPreferidaEm,
       });
 
       return {

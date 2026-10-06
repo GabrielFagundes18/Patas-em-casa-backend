@@ -44,10 +44,11 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
       return response.data.data;
     }
 
-    async function publicAdoptionRequest(animalId, email) {
+    async function publicAdoptionRequest(animalId, email, extra = {}) {
       return request('POST', '/api/v1/public/adoption-requests', {
         auth: false,
         body: {
+          ...extra,
           animal_id: animalId,
           nome: 'Candidato de Integração',
           email,
@@ -210,6 +211,61 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
 
         const revealed = await request('POST', `/api/v1/adoption-requests/${secondRequest.id}/reveal`);
         assert.equal(revealed.data.data.adotante.email, `segundo${EMAIL_SUFFIX}`);
+      });
+
+      await t.test('agenda: data preferida, conflito de horário, remarcação, cancelamento e painel', async () => {
+        const animal = await createAnimal('Integração Agenda');
+        const created = await publicAdoptionRequest(animal.id, `agenda1${EMAIL_SUFFIX}`, { visita_preferida_em: '2099-05-10T10:00' });
+        assert.equal(created.status, 201);
+        const pastPreference = await publicAdoptionRequest(animal.id, `agenda9${EMAIL_SUFFIX}`, { visita_preferida_em: '2001-01-01T10:00' });
+        assert.equal(pastPreference.status, 422);
+
+        const pedido = (await request('GET', `/api/v1/adoption-requests?animal_id=${animal.id}`)).data.data[0];
+        const detail = await request('GET', `/api/v1/adoption-requests/${pedido.id}`);
+        assert.equal(detail.data.data.visita_preferida_em, '2099-05-10T10:00');
+        assert.deepEqual(detail.data.data.agendamentos, []);
+
+        const scheduled = await request('POST', `/api/v1/adoption-requests/${pedido.id}/schedule`, {
+          body: { tipo: 'visita', data_hora: '2099-05-10T10:00', duracao_minutos: 60, responsavel_id: manager.id, local: 'Rua das Flores, 10' },
+        });
+        assert.equal(scheduled.status, 200);
+        const visit = scheduled.data.data.agendamento;
+        assert.equal(visit.responsavel.id, manager.id);
+        assert.equal(visit.data_hora, '2099-05-10T10:00');
+        assert.equal(scheduled.data.data.pedido.status, 'visita_agendada');
+
+        const otherAnimal = await createAnimal('Integração Agenda 2');
+        await publicAdoptionRequest(otherAnimal.id, `agenda2${EMAIL_SUFFIX}`);
+        const other = (await request('GET', `/api/v1/adoption-requests?animal_id=${otherAnimal.id}`)).data.data[0];
+        const conflict = await request('POST', `/api/v1/adoption-requests/${other.id}/schedule`, {
+          body: { tipo: 'entrevista', data_hora: '2099-05-10T10:30', responsavel_id: manager.id },
+        });
+        assert.equal(conflict.status, 409);
+        assert.equal(conflict.data.error.code, 'HORARIO_INDISPONIVEL');
+        const backToBack = await request('POST', `/api/v1/adoption-requests/${other.id}/schedule`, {
+          body: { tipo: 'entrevista', data_hora: '2099-05-10T11:00', responsavel_id: manager.id },
+        });
+        assert.equal(backToBack.status, 200);
+
+        const overlapping = await request('PATCH', `/api/v1/adoption-requests/${pedido.id}/appointments/${visit.id}`, { body: { data_hora: '2099-05-10T10:45' } });
+        assert.equal(overlapping.status, 409);
+        const moved = await request('PATCH', `/api/v1/adoption-requests/${pedido.id}/appointments/${visit.id}`, { body: { data_hora: '2099-05-10T09:00' } });
+        assert.equal(moved.status, 200);
+        assert.equal(moved.data.data.agendamento.data_hora, '2099-05-10T09:00');
+        assert.equal(moved.data.data.agendamento.local, 'Rua das Flores, 10');
+
+        const summary = await request('GET', '/api/v1/dashboard/summary?atualizar=true');
+        const agendaItem = summary.data.data.agenda.find((item) => item.id === visit.id);
+        assert.equal(agendaItem.tipo, 'visita');
+        assert.equal(new Date(agendaItem.referencia_em).toISOString(), '2099-05-10T12:00:00.000Z');
+
+        const cancelled = await request('POST', `/api/v1/adoption-requests/${pedido.id}/appointments/${visit.id}/cancel`, { body: { motivo: 'Adotante viajou.' } });
+        assert.equal(cancelled.status, 200);
+        assert.equal(cancelled.data.data.pedido.status, 'em_analise');
+        const completeCancelled = await request('POST', `/api/v1/adoption-requests/${pedido.id}/appointments/${visit.id}/complete`);
+        assert.equal(completeCancelled.status, 409);
+        const done = await request('POST', `/api/v1/adoption-requests/${other.id}/appointments/${backToBack.data.data.agendamento.id}/complete`);
+        assert.equal(done.data.data.pedido.agendamentos[0].status, 'realizado');
       });
 
       await t.test('adoção: reprovar o último pedido devolve o animal para disponível', async () => {

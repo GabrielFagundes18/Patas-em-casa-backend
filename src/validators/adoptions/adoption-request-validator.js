@@ -1,4 +1,5 @@
 const { EMAIL_PATTERN, PHONE_PATTERN, UUID_PATTERN } = require('../common-validators');
+const { isValidBrasiliaDateTime } = require('../../utils/brasilia-time');
 
 const MAX_ROUTINE_LENGTH = 2000;
 
@@ -46,6 +47,12 @@ function validateAdoptionRequest({ body }) {
 
   if (body.ciente_pos_adocao !== true) {
     details.push({ field: 'ciente_pos_adocao', message: 'Confirme que está ciente do acompanhamento pós-adoção.' });
+  }
+
+  // Sugestão do adotante para a visita (opcional); a equipe confirma o horário ao agendar.
+  if (body.visita_preferida_em !== undefined && body.visita_preferida_em !== null && body.visita_preferida_em !== ''
+    && !isValidBrasiliaDateTime(body.visita_preferida_em)) {
+    details.push({ field: 'visita_preferida_em', message: 'Informe a data e o horário preferidos no formato AAAA-MM-DDTHH:mm.' });
   }
 
   return details;

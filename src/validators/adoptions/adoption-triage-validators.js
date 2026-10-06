@@ -76,14 +76,28 @@ function validateUpdateRequest({ body }) {
   return details;
 }
 
+function booleanDetail(body, field) {
+  return body[field] === undefined || typeof body[field] === 'boolean' ? null : { field, message: 'Informe true ou false.' };
+}
+
 function validateDecision({ body }) {
-  const detail = textDetail(body, 'justificativa', {
-    min: 10,
-    max: 2000,
-    required: true,
-    message: 'Escreva a justificativa da decisão (mínimo de 10 caracteres).',
-  });
-  return detail ? [detail] : [];
+  return [
+    textDetail(body, 'justificativa', {
+      min: 10,
+      max: 2000,
+      required: true,
+      message: 'Escreva a justificativa da decisão (mínimo de 10 caracteres).',
+    }),
+    booleanDetail(body, 'notificar_adotante'),
+    textDetail(body, 'mensagem_adotante', { min: 0, max: 1000, message: 'Escreva a mensagem ao adotante (até 1000 caracteres).' }),
+  ].filter(Boolean);
+}
+
+function durationDetail(body) {
+  if (body.duracao_minutos === undefined) return null;
+  return Number.isInteger(body.duracao_minutos) && body.duracao_minutos >= 15 && body.duracao_minutos <= 480
+    ? null
+    : { field: 'duracao_minutos', message: 'Informe a duração em minutos, de 15 a 480.' };
 }
 
 function validateSchedule({ body }) {
@@ -96,11 +110,48 @@ function validateSchedule({ body }) {
       : { field: 'data_hora', message: 'Informe data e horário no formato AAAA-MM-DDTHH:mm.' },
     textDetail(body, 'local', { min: 0, max: 300, message: 'Informe o local ou link (até 300 caracteres).' }),
     textDetail(body, 'mensagem', { min: 0, max: 1000, message: 'Escreva a mensagem (até 1000 caracteres).' }),
-    body.enviar_email === undefined || typeof body.enviar_email === 'boolean'
+    booleanDetail(body, 'enviar_email'),
+    durationDetail(body),
+    body.responsavel_id === undefined || body.responsavel_id === null
+      || (typeof body.responsavel_id === 'string' && UUID_PATTERN.test(body.responsavel_id))
       ? null
-      : { field: 'enviar_email', message: 'Informe true ou false.' },
+      : { field: 'responsavel_id', message: 'Informe um identificador válido.' },
   ];
   return details.filter(Boolean);
 }
 
-module.exports = { validateListRequests, validateBoard, validateUpdateRequest, validateDecision, validateSchedule };
+function validateAppointmentParams({ params }) {
+  return [params.id, params.appointmentId].every((value) => UUID_PATTERN.test(value))
+    ? []
+    : [{ field: 'id', message: 'Informe identificadores válidos.' }];
+}
+
+function validateReschedule({ body }) {
+  return [
+    isValidBrasiliaDateTime(body.data_hora)
+      ? null
+      : { field: 'data_hora', message: 'Informe data e horário no formato AAAA-MM-DDTHH:mm.' },
+    durationDetail(body),
+    textDetail(body, 'local', { min: 0, max: 300, message: 'Informe o local ou link (até 300 caracteres).' }),
+    textDetail(body, 'mensagem', { min: 0, max: 1000, message: 'Escreva a mensagem (até 1000 caracteres).' }),
+    booleanDetail(body, 'enviar_email'),
+  ].filter(Boolean);
+}
+
+function validateCancelAppointment({ body }) {
+  return [
+    textDetail(body, 'motivo', { min: 0, max: 500, message: 'Escreva o motivo (até 500 caracteres).' }),
+    booleanDetail(body, 'enviar_email'),
+  ].filter(Boolean);
+}
+
+module.exports = {
+  validateListRequests,
+  validateBoard,
+  validateUpdateRequest,
+  validateDecision,
+  validateSchedule,
+  validateAppointmentParams,
+  validateReschedule,
+  validateCancelAppointment,
+};
