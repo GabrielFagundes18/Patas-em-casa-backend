@@ -18,63 +18,35 @@ const EXPORT_COLUMNS = [
   { key: 'data_entrada', label: 'Data de entrada' },
 ];
 
-exports.list = async (req, res, next) => {
-  try {
-    const { items, total } = await animalService.list(req.query);
-    const { page, pageSize } = parsePagination(req.query);
-    return res.json(listResponse(items, total, page, pageSize));
-  } catch (error) {
-    return next(error);
-  }
+exports.list = async (req, res) => {
+  const { items, total } = await animalService.list(req.query);
+  const { page, pageSize } = parsePagination(req.query);
+  return res.json(listResponse(items, total, page, pageSize));
 };
 
-exports.exportCsv = async (req, res, next) => {
-  try {
-    const rows = await animalService.listForExport(req.query);
-    return sendCsv(res, `animais-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_COLUMNS, rows));
-  } catch (error) {
-    return next(error);
-  }
+exports.exportCsv = async (req, res) => {
+  const rows = await animalService.listForExport(req.query);
+  return sendCsv(res, `animais-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_COLUMNS, rows));
 };
 
-exports.getById = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await animalService.getById(req.params.id)));
-  } catch (error) {
-    return next(error);
-  }
+exports.getById = async (req, res) => {
+  return res.json(successResponse(await animalService.getById(req.params.id)));
 };
 
-exports.create = async (req, res, next) => {
-  try {
-    return res.status(201).json(successResponse(await animalService.create(req.body, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.create = async (req, res) => {
+  return res.status(201).json(successResponse(await animalService.create(req.body, auditContext(req))));
 };
 
-exports.update = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await animalService.update(req.params.id, req.body, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.update = async (req, res) => {
+  return res.json(successResponse(await animalService.update(req.params.id, req.body, auditContext(req))));
 };
 
-exports.updateStatus = async (req, res, next) => {
-  try {
-    const { status, motivo } = req.body;
-    return res.json(successResponse(await animalService.changeStatus(req.params.id, { status, motivo }, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.updateStatus = async (req, res) => {
+  const { status, motivo } = req.body;
+  return res.json(successResponse(await animalService.changeStatus(req.params.id, { status, motivo }, auditContext(req))));
 };
 
-exports.remove = async (req, res, next) => {
-  try {
-    await animalService.remove(req.params.id, auditContext(req));
-    return res.status(204).end();
-  } catch (error) {
-    return next(error);
-  }
+exports.remove = async (req, res) => {
+  await animalService.remove(req.params.id, auditContext(req));
+  return res.status(204).end();
 };

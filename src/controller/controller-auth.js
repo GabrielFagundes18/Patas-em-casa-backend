@@ -1,6 +1,5 @@
 const authService = require('../services/auth/auth-service');
 const auditService = require('../services/audit/audit-service');
-const { auditContext } = require('../services/audit/audit-service');
 const { readConfig } = require('../config/env');
 const { parseCookies, serializeCookie } = require('../utils/cookies');
 const { successResponse } = require('../utils/http-response');
@@ -25,14 +24,10 @@ function clearRefreshCookie(res) {
   res.append('Set-Cookie', serializeCookie(REFRESH_COOKIE, '', { ...refreshCookieOptions, maxAgeSeconds: 0 }));
 }
 
-exports.login = async (req, res, next) => {
-  try {
-    const { refreshToken, ...session } = await authService.login(req.body);
-    setRefreshCookie(res, refreshToken);
-    return res.json(successResponse(session));
-  } catch (error) {
-    return next(error);
-  }
+exports.login = async (req, res) => {
+  const { refreshToken, ...session } = await authService.login(req.body);
+  setRefreshCookie(res, refreshToken);
+  return res.json(successResponse(session));
 };
 
 exports.refresh = async (req, res, next) => {
@@ -51,27 +46,19 @@ exports.logout = (req, res) => {
   return res.status(204).end();
 };
 
-exports.me = async (req, res, next) => {
-  try {
-    const user = await authService.getCurrentUser(req.user.sub);
-    return res.json(successResponse(user));
-  } catch (error) {
-    return next(error);
-  }
+exports.me = async (req, res) => {
+  const user = await authService.getCurrentUser(req.user.sub);
+  return res.json(successResponse(user));
 };
 
-exports.changePassword = async (req, res, next) => {
-  try {
-    await authService.changeOwnPassword(req.user.sub, req.body);
-    await auditService.record({
-      actor: auditContext(req),
-      action: 'alterar_propria_senha',
-      module: 'team',
-      entity: 'usuario',
-      entityId: req.user.sub,
-    });
-    return res.status(204).end();
-  } catch (error) {
-    return next(error);
-  }
+exports.changePassword = async (req, res) => {
+  await authService.changeOwnPassword(req.user.sub, req.body);
+  await auditService.record({
+    actor: auditService.auditContext(req),
+    action: 'alterar_propria_senha',
+    module: 'team',
+    entity: 'usuario',
+    entityId: req.user.sub,
+  });
+  return res.status(204).end();
 };

@@ -18,73 +18,41 @@ const EXPORT_COLUMNS = [
   { label: 'Cadastro', value: (row) => new Date(row.criado_em).toISOString().slice(0, 10) },
 ];
 
-exports.list = async (req, res, next) => {
-  try {
-    const { items, total } = await adopterService.list(req.query);
-    const { page, pageSize } = parsePagination(req.query);
-    return res.json(listResponse(items, total, page, pageSize));
-  } catch (error) {
-    return next(error);
-  }
+exports.list = async (req, res) => {
+  const { items, total } = await adopterService.list(req.query);
+  const { page, pageSize } = parsePagination(req.query);
+  return res.json(listResponse(items, total, page, pageSize));
 };
 
-exports.exportCsv = async (req, res, next) => {
-  try {
-    const revealContacts = hasPermission(req.user.role, 'adopters:reveal');
-    const rows = await adopterService.listForExport(req.query, { revealContacts }, auditContext(req));
-    return sendCsv(res, `adotantes-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_COLUMNS, rows));
-  } catch (error) {
-    return next(error);
-  }
+exports.exportCsv = async (req, res) => {
+  const revealContacts = hasPermission(req.user.role, 'adopters:reveal');
+  const rows = await adopterService.listForExport(req.query, { revealContacts }, auditContext(req));
+  return sendCsv(res, `adotantes-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_COLUMNS, rows));
 };
 
-exports.getById = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await adopterService.getById(req.params.id)));
-  } catch (error) {
-    return next(error);
-  }
+exports.getById = async (req, res) => {
+  return res.json(successResponse(await adopterService.getById(req.params.id)));
 };
 
-exports.reveal = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await adopterService.reveal(req.params.id, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.reveal = async (req, res) => {
+  return res.json(successResponse(await adopterService.reveal(req.params.id, auditContext(req))));
 };
 
-exports.update = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await adopterService.update(req.params.id, req.body, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.update = async (req, res) => {
+  return res.json(successResponse(await adopterService.update(req.params.id, req.body, auditContext(req))));
 };
 
-exports.exportTitularData = async (req, res, next) => {
-  try {
-    const data = await adopterService.exportTitularData(req.params.id, auditContext(req));
-    res.setHeader('Content-Disposition', `attachment; filename="dados-titular-${req.params.id}.json"`);
-    return res.json(successResponse(data));
-  } catch (error) {
-    return next(error);
-  }
+exports.exportTitularData = async (req, res) => {
+  const data = await adopterService.exportTitularData(req.params.id, auditContext(req));
+  res.setHeader('Content-Disposition', `attachment; filename="dados-titular-${req.params.id}.json"`);
+  return res.json(successResponse(data));
 };
 
-exports.anonymize = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await adopterService.anonymize(req.params.id, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.anonymize = async (req, res) => {
+  return res.json(successResponse(await adopterService.anonymize(req.params.id, auditContext(req))));
 };
 
-exports.remove = async (req, res, next) => {
-  try {
-    await adopterService.remove(req.params.id, auditContext(req));
-    return res.status(204).end();
-  } catch (error) {
-    return next(error);
-  }
+exports.remove = async (req, res) => {
+  await adopterService.remove(req.params.id, auditContext(req));
+  return res.status(204).end();
 };

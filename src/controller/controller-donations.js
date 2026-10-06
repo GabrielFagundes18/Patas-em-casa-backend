@@ -15,61 +15,33 @@ const EXPORT_COLUMNS = [
   { label: 'Valor (R$)', value: (row) => formatDecimal(row.valor) },
 ];
 
-exports.list = async (req, res, next) => {
-  try {
-    const { items, total } = await donationService.list(req.query);
-    const { page, pageSize } = parsePagination(req.query);
-    return res.json(listResponse(items, total, page, pageSize));
-  } catch (error) {
-    return next(error);
-  }
+exports.list = async (req, res) => {
+  const { items, total } = await donationService.list(req.query);
+  const { page, pageSize } = parsePagination(req.query);
+  return res.json(listResponse(items, total, page, pageSize));
 };
 
-exports.summary = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await donationService.summary(req.query)));
-  } catch (error) {
-    return next(error);
-  }
+exports.summary = async (req, res) => {
+  return res.json(successResponse(await donationService.summary(req.query)));
 };
 
-exports.monthly = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await donationService.monthly(req.query)));
-  } catch (error) {
-    return next(error);
-  }
+exports.monthly = async (req, res) => {
+  return res.json(successResponse(await donationService.monthly(req.query)));
 };
 
-exports.exportCsv = async (req, res, next) => {
-  try {
-    const rows = await donationService.listForExport(req.query, auditContext(req));
-    return sendCsv(res, `doacoes-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_COLUMNS, rows));
-  } catch (error) {
-    return next(error);
-  }
+exports.exportCsv = async (req, res) => {
+  const rows = await donationService.listForExport(req.query, auditContext(req));
+  return sendCsv(res, `doacoes-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(EXPORT_COLUMNS, rows));
 };
 
-exports.getById = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await donationService.getById(req.params.id)));
-  } catch (error) {
-    return next(error);
-  }
+exports.getById = async (req, res) => {
+  return res.json(successResponse(await donationService.getById(req.params.id)));
 };
 
-exports.create = async (req, res, next) => {
-  try {
-    return res.status(201).json(successResponse(await donationService.create(req.body, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.create = async (req, res) => {
+  return res.status(201).json(successResponse(await donationService.create(req.body, auditContext(req))));
 };
 
-exports.update = async (req, res, next) => {
-  try {
-    return res.json(successResponse(await donationService.update(req.params.id, req.body, auditContext(req))));
-  } catch (error) {
-    return next(error);
-  }
+exports.update = async (req, res) => {
+  return res.json(successResponse(await donationService.update(req.params.id, req.body, auditContext(req))));
 };
