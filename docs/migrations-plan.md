@@ -3,8 +3,9 @@
 ## Estado
 
 - `000` está aplicada no Neon.
-- `009` a `013` são usadas pela API atual e precisam ser aplicadas **antes** de publicar essa versão
-  (veja "Como aplicar"). Foram testadas em banco local descartável, com reversão.
+- `009` a `013` foram aplicadas no Neon em 06/10/2026 (`npm run db:migrate`, com `--baseline` da 000);
+  ponto de restauração anterior: 2026-10-06T21:53:52Z. Testadas antes em banco local descartável, com reversão.
+  Em outros bancos (novos ambientes), aplicar antes de publicar a API (veja "Como aplicar").
 - `001` a `008` continuam propostas para revisão: nenhuma foi aplicada. As partes delas que a API passou a
   usar (sessões, redefinição de senha, fotos, temperamento, agenda e webhooks) foram movidas para 010–013.
 
