@@ -14,4 +14,4 @@ function getPasswordProblems(password) {
   return problems;
 }
 
-module.exports = { MIN_PASSWORD_LENGTH, MAX_PASSWORD_BYTES, getPasswordProblems };
+module.exports = { MIN_PASSWORD_LENGTH, getPasswordProblems };

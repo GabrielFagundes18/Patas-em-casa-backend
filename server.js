@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 const app = require('./src/app');
 const { pool } = require('./src/config/db');
 const { readConfig } = require('./src/config/env');

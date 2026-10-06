@@ -32,4 +32,4 @@ function parsePagination(query = {}) {
   return { page, pageSize, offset };
 }
 
-module.exports = { parsePagination, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE };
+module.exports = { parsePagination, MAX_PAGE_SIZE };

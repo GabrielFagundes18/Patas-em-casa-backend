@@ -39,4 +39,4 @@ function sendCsv(res, filename, csv) {
   return res.send(csv);
 }
 
-module.exports = { MAX_EXPORT_ROWS, escapeCell, toCsv, formatDecimal, ensureExportLimit, sendCsv };
+module.exports = { MAX_EXPORT_ROWS, toCsv, formatDecimal, ensureExportLimit, sendCsv };

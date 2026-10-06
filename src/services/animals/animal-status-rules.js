@@ -44,4 +44,4 @@ function assertStatusTransition({ from, to, role, motivo }) {
   }
 }
 
-module.exports = { TRANSITIONS, assertStatusTransition };
+module.exports = { assertStatusTransition };

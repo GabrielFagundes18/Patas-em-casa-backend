@@ -65,4 +65,4 @@ function getPermissionMatrix() {
   };
 }
 
-module.exports = { moduleActions, permissionsByRole, hasPermission, getPermissionsForRole, getPermissionMatrix };
+module.exports = { hasPermission, getPermissionsForRole, getPermissionMatrix };
