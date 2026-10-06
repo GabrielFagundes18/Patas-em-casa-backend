@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { readConfig } = require('../src/config/env');
 const AppError = require('../src/utils/app-error');
 const { createAuthService } = require('../src/services/auth/auth-service');
+const { createFakeSessions } = require('./helpers/fake-sessions');
 
 const activeAdmin = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -23,6 +24,7 @@ test('login reads the user from the repository and returns a short-lived safe us
     comparePassword: async (password, passwordHash) => (
       password === 'correct password' && passwordHash === activeAdmin.senha_hash
     ),
+    sessions: createFakeSessions(),
   });
 
   const result = await service.login({ email: ' ADMIN@example.org ', password: 'correct password' });

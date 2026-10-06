@@ -20,5 +20,6 @@ router.post('/', requirePermission('team:create'), validateRequest(validateCreat
 router.get('/:id', requirePermission('team:read'), validateRequest(validateIdParam), asyncHandler(ControllerUsers.getById));
 router.patch('/:id', requirePermission('team:update'), validateRequest(validateIdParam), validateRequest(validateUpdateUser), asyncHandler(ControllerUsers.update));
 router.post('/:id/password', requirePermission('team:update'), validateRequest(validateIdParam), validateRequest(validateResetPassword), asyncHandler(ControllerUsers.resetPassword));
+router.post('/:id/invite', requirePermission('team:update'), validateRequest(validateIdParam), asyncHandler(ControllerUsers.sendInvite));
 
 module.exports = router;

@@ -27,4 +27,8 @@ exports.resetPassword = async (req, res) => {
   return res.status(204).end();
 };
 
+exports.sendInvite = async (req, res) => {
+  return res.json(successResponse(await userService.sendInvite(req.params.id, auditContext(req))));
+};
+
 exports.permissionMatrix = (req, res) => res.json(successResponse(getPermissionMatrix()));

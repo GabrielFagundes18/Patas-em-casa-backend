@@ -51,6 +51,14 @@ const roleMatrix = Object.freeze({
   },
 });
 
+const roleLabels = Object.freeze({
+  administrador: 'Administrador (Super Admin)',
+  gestor_ong: 'Gestor da ONG',
+  gestor_animais: 'Gestor de animais (Veterinário/Cuidador)',
+  financeiro: 'Financeiro (Atendimento e Doações)',
+  voluntariado: 'Voluntariado (Voluntário)',
+});
+
 const permissionsByRole = Object.freeze(Object.fromEntries(
   Object.entries(roleMatrix).map(([role, modules]) => [
     role,
@@ -76,4 +84,4 @@ function getPermissionMatrix() {
   };
 }
 
-module.exports = { hasPermission, getPermissionsForRole, getPermissionMatrix };
+module.exports = { roleLabels, hasPermission, getPermissionsForRole, getPermissionMatrix };

@@ -1,10 +1,13 @@
+const { randomBytes } = require('node:crypto');
 const bcrypt = require('bcryptjs');
 const AppError = require('../../utils/app-error');
 const { getPermissionsForRole } = require('../../config/permissions');
 const { getPasswordProblems } = require('../../utils/password-policy');
 const { parsePagination } = require('../../utils/pagination');
 const userRepository = require('../../repositories/auth/user-repository');
+const sessionRepository = require('../../repositories/auth/session-repository');
 const auditService = require('../audit/audit-service');
+const accessLinkService = require('../auth/access-link-service');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -28,6 +31,8 @@ function emailInUse() {
 function createUserService(repository = userRepository, {
   audit = auditService,
   hashPassword = (password) => bcrypt.hash(password, BCRYPT_ROUNDS),
+  sessions = sessionRepository,
+  accessLinks = accessLinkService,
 } = {}) {
   async function list(query = {}) {
     const { items, total } = await repository.list({
@@ -47,15 +52,19 @@ function createUserService(repository = userRepository, {
     return serializeUser(user);
   }
 
+  // Com enviar_convite, a pessoa recebe por e-mail um link para criar a própria senha; sem senha
+  // informada, a conta nasce com uma senha aleatória que ninguém conhece.
   async function create(payload, actor = {}) {
-    assertStrongPassword(payload.senha, 'senha');
+    const invite = payload.enviar_convite === true;
+    if (payload.senha !== undefined || !invite) assertStrongPassword(payload.senha, 'senha');
+    const initialPassword = payload.senha ?? randomBytes(32).toString('base64url');
 
     let user;
     try {
       user = await repository.create({
         nome: payload.nome.trim(),
         email: payload.email.trim().toLowerCase(),
-        senhaHash: await hashPassword(payload.senha),
+        senhaHash: await hashPassword(initialPassword),
         cargo: payload.cargo,
         ativo: payload.ativo ?? true,
       });
@@ -65,7 +74,19 @@ function createUserService(repository = userRepository, {
     }
 
     await audit.record({ actor, action: 'criar', module: 'team', entity: 'usuario', entityId: user.id, after: user });
-    return serializeUser(user);
+    const convite = invite ? await accessLinks.send(user, 'convite') : null;
+    return { ...serializeUser(user), convite };
+  }
+
+  // (Re)envia o convite: um link novo para a pessoa criar a senha; os links anteriores deixam de valer.
+  async function sendInvite(id, actor = {}) {
+    const user = await getById(id);
+    if (!user.ativo) {
+      throw new AppError(409, 'USUARIO_INATIVO', 'Reative o usuário antes de enviar o convite.');
+    }
+    const result = await accessLinks.send(user, 'convite');
+    await audit.record({ actor, action: 'enviar_convite', module: 'team', entity: 'usuario', entityId: id, after: { enviado: result.enviado } });
+    return result;
   }
 
   async function update(id, payload, actor = {}) {
@@ -108,6 +129,9 @@ function createUserService(repository = userRepository, {
       });
     }
 
+    // Desativado sai de todas as sessões na hora.
+    if (changes.ativo === false && current.ativo) await sessions.revokeAllForUser(id);
+
     return serializeUser(user);
   }
 
@@ -115,10 +139,11 @@ function createUserService(repository = userRepository, {
     await getById(id);
     assertStrongPassword(novaSenha, 'nova_senha');
     await repository.updatePassword(id, await hashPassword(novaSenha));
+    await sessions.revokeAllForUser(id);
     await audit.record({ actor, action: 'redefinir_senha', module: 'team', entity: 'usuario', entityId: id });
   }
 
-  return { list, getById, create, update, resetPassword };
+  return { list, getById, create, update, resetPassword, sendInvite };
 }
 
 module.exports = { ...createUserService(), createUserService };

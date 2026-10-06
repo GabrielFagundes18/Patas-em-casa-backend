@@ -25,9 +25,14 @@ function validateCreateUser({ body }) {
     body.cargo === undefined
       ? { field: 'cargo', message: 'Informe o cargo.' }
       : enumDetail(body.cargo, 'cargo', user.roles),
-    typeof body.senha === 'string' && body.senha.length > 0 && body.senha.length <= 128
+    // Senha inicial só é dispensada quando a pessoa vai criar a própria senha pelo convite.
+    (body.senha === undefined && body.enviar_convite === true)
+      || (typeof body.senha === 'string' && body.senha.length > 0 && body.senha.length <= 128)
       ? null
-      : { field: 'senha', message: 'Informe a senha inicial (até 128 caracteres).' },
+      : { field: 'senha', message: 'Informe a senha inicial (até 128 caracteres) ou envie um convite por e-mail.' },
+    body.enviar_convite === undefined || typeof body.enviar_convite === 'boolean'
+      ? null
+      : { field: 'enviar_convite', message: 'Informe true ou false.' },
     body.ativo === undefined || typeof body.ativo === 'boolean'
       ? null
       : { field: 'ativo', message: 'Informe true ou false.' },

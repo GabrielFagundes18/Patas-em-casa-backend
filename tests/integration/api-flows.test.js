@@ -6,6 +6,7 @@ const pool = require('../../src/db/db');
 const app = require('../../src/app');
 const { withRollback } = require('../helpers/db-transaction');
 const { readOrder } = require('../../scripts/migrar');
+const accessLinks = require('../../src/services/auth/access-link-service');
 
 const PASSWORD = 'Integracao-Teste-123';
 const NEW_PASSWORD = 'Integracao-Nova-456';
@@ -91,6 +92,45 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(oldPassword.status, 401);
         const newPassword = await request('POST', '/api/v1/auth/login', { auth: false, body: { email: `admin${EMAIL_SUFFIX}`, password: NEW_PASSWORD } });
         assert.equal(newPassword.status, 200);
+      });
+
+      await t.test('sessões revogáveis, esqueci a senha, link de redefinição e convite', async () => {
+        const mainToken = token;
+        const login = await request('POST', '/api/v1/auth/login', { auth: false, body: { email: `admin${EMAIL_SUFFIX}`, password: NEW_PASSWORD } });
+        const cookie = login.headers.get('set-cookie').split(';')[0];
+        token = login.data.data.token;
+        assert.equal((await request('GET', '/api/v1/me')).status, 200);
+
+        const logout = await request('POST', '/api/v1/auth/logout', { auth: false, headers: { Cookie: cookie, 'X-Requested-With': 'XMLHttpRequest' } });
+        assert.equal(logout.status, 204);
+        assert.equal((await request('GET', '/api/v1/me')).status, 401);
+        const refreshAfterLogout = await request('POST', '/api/v1/auth/refresh', { auth: false, headers: { Cookie: cookie, 'X-Requested-With': 'XMLHttpRequest' } });
+        assert.equal(refreshAfterLogout.status, 401);
+        token = mainToken;
+        assert.equal((await request('GET', '/api/v1/me')).status, 200);
+
+        const forgot = await request('POST', '/api/v1/auth/forgot-password', { auth: false, body: { email: 'ninguem@example.invalid' } });
+        assert.equal(forgot.status, 202);
+        const invalidLink = await request('POST', '/api/v1/auth/reset-password', { auth: false, body: { token: 'x'.repeat(43), nova_senha: 'OutraSenha2026' } });
+        assert.equal(invalidLink.status, 400);
+        assert.equal(invalidLink.data.error.code, 'LINK_INVALIDO');
+
+        const invited = await request('POST', '/api/v1/users', {
+          body: { nome: 'Convidada de integração', email: `convite${EMAIL_SUFFIX}`, cargo: 'gestor_ong', enviar_convite: true },
+        });
+        assert.equal(invited.status, 201);
+        assert.equal(typeof invited.data.data.convite.enviado, 'boolean');
+
+        const { url } = await accessLinks.issue({ id: invited.data.data.id }, 'convite');
+        const inviteToken = new URL(url).searchParams.get('token');
+        const defined = await request('POST', '/api/v1/auth/reset-password', { auth: false, body: { token: inviteToken, nova_senha: 'SenhaDoConvite2026' } });
+        assert.equal(defined.status, 200);
+        const reused = await request('POST', '/api/v1/auth/reset-password', { auth: false, body: { token: inviteToken, nova_senha: 'SenhaDoConvite2026' } });
+        assert.equal(reused.status, 400);
+        const invitedLogin = await request('POST', '/api/v1/auth/login', { auth: false, body: { email: `convite${EMAIL_SUFFIX}`, password: 'SenhaDoConvite2026' } });
+        assert.equal(invitedLogin.status, 200);
+        assert.equal(invitedLogin.data.data.user.cargo, 'gestor_ong');
+        assert.equal(invitedLogin.data.data.user.permissions.includes('team:read'), false);
       });
 
       await t.test('animais: cadastro, máquina de estados, exportação e visão pública', async () => {

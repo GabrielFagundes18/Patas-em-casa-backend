@@ -3,6 +3,7 @@ const AppError = require('../utils/app-error');
 const { getPermissionsForRole, hasPermission } = require('../config/permissions');
 const { readConfig } = require('../config/env');
 const userRepository = require('../repositories/auth/user-repository');
+const sessionRepository = require('../repositories/auth/session-repository');
 const { UUID_PATTERN } = require('../validators/common-validators');
 
 const { jwtSecret } = readConfig();
@@ -39,7 +40,15 @@ async function requireAuth(req, res, next) {
       return next(new AppError(401, 'SESSAO_INVALIDA', 'Sessão expirada ou não autenticada.'));
     }
 
-    req.user = { sub: user.id, email: user.email, nome: user.nome, role: user.cargo };
+    // Sessão revogada (logout, troca de senha, desativação) derruba o token na hora, sem esperar expirar.
+    if (payload.sid !== undefined) {
+      const session = UUID_PATTERN.test(String(payload.sid)) ? await sessionRepository.findActive(payload.sid) : null;
+      if (!session || session.usuario_id !== user.id) {
+        return next(new AppError(401, 'SESSAO_INVALIDA', 'Sessão expirada ou não autenticada.'));
+      }
+    }
+
+    req.user = { sub: user.id, email: user.email, nome: user.nome, role: user.cargo, sid: payload.sid };
     return next();
   } catch (error) {
     return next(error);

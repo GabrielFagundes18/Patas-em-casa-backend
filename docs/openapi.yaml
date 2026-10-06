@@ -112,13 +112,56 @@ paths:
   /api/v1/auth/logout:
     post:
       tags: [Autenticação]
-      summary: Sair (apaga o cookie de renovação)
+      summary: Sair (revoga a sessão no banco e apaga o cookie de renovação)
       security: []
       parameters:
         - $ref: '#/components/parameters/XRequestedWith'
       responses:
         '204': { description: Sessão encerrada }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Autenticação]
+      summary: Pedir link para criar nova senha (esqueci minha senha)
+      description: |
+        Sempre responde 202, exista ou não o e-mail (não revela contas). Para conta ativa, envia por e-mail um
+        link de uso único, válido por 1 hora, para FRONTEND_URL/admin/redefinir-senha. Exige SMTP configurado.
+        Limite: 10 pedidos por IP a cada 15 minutos.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: 'Pedido recebido: { mensagem }' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Autenticação]
+      summary: Definir nova senha pelo link de redefinição ou de convite
+      description: 'Link de uso único. Encerra todas as sessões do usuário. Erros: LINK_INVALIDO (400), SENHA_FRACA (422).'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, nova_senha]
+              properties:
+                token: { type: string, description: Token recebido no link do e-mail }
+                nova_senha: { type: string }
+      responses:
+        '200': { description: 'Senha definida: { mensagem }' }
+        '400': { description: 'LINK_INVALIDO — link inválido, usado ou expirado' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /api/v1/me:
     get:
       tags: [Autenticação]
@@ -176,19 +219,23 @@ paths:
     post:
       tags: [Equipe]
       summary: Criar usuário da equipe
-      description: 'Permissão: team:create. A senha inicial segue a política de senha forte.'
+      description: |
+        Permissão: team:create. Informe a senha inicial (política de senha forte) ou envie enviar_convite=true para
+        a pessoa receber por e-mail um link (72 h) e criar a própria senha. A resposta traz "convite":
+        { enviado, motivo } quando o convite foi pedido.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [nome, email, cargo, senha]
+              required: [nome, email, cargo]
               properties:
                 nome: { type: string, maxLength: 150 }
                 email: { type: string, format: email }
                 cargo: { $ref: '#/components/schemas/Role' }
-                senha: { type: string }
+                senha: { type: string, description: Obrigatória sem enviar_convite }
+                enviar_convite: { type: boolean, default: false }
                 ativo: { type: boolean, default: true }
       responses:
         '201':
@@ -243,7 +290,7 @@ paths:
     post:
       tags: [Equipe]
       summary: Redefinir a senha de um usuário
-      description: 'Permissão: team:update. Auditado.'
+      description: 'Permissão: team:update. Encerra todas as sessões do usuário. Auditado.'
       requestBody:
         required: true
         content:
@@ -257,6 +304,17 @@ paths:
         '204': { description: Senha redefinida }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/users/{id}/invite:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Equipe]
+      summary: (Re)enviar convite por e-mail para a pessoa criar a senha
+      description: 'Permissão: team:update. Link novo de 72 h; os anteriores deixam de valer. Auditado.'
+      responses:
+        '200': { description: '{ enviado, motivo? } — motivo explica quando o e-mail não saiu (ex.: SMTP não configurado)' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: USUARIO_INATIVO }
   /api/v1/permissions:
     get:
       tags: [Equipe]
@@ -1155,7 +1213,7 @@ components:
         totalPages: { type: integer }
     Role:
       type: string
-      enum: [administrador, gestor_animais, financeiro, voluntariado]
+      enum: [administrador, gestor_ong, gestor_animais, financeiro, voluntariado]
     User:
       type: object
       properties:

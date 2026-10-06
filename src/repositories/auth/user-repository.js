@@ -83,8 +83,8 @@ async function update(id, changes) {
   return result.rows[0] || null;
 }
 
-async function updatePassword(id, senhaHash) {
-  const result = await pool.query(
+async function updatePassword(id, senhaHash, db = pool) {
+  const result = await db.query(
     'UPDATE usuarios SET senha_hash = $1 WHERE id = $2 RETURNING id',
     [senhaHash, id]
   );

@@ -25,7 +25,7 @@ function clearRefreshCookie(res) {
 }
 
 exports.login = async (req, res) => {
-  const { refreshToken, ...session } = await authService.login(req.body);
+  const { refreshToken, ...session } = await authService.login(req.body, { userAgent: req.get('user-agent') });
   setRefreshCookie(res, refreshToken);
   return res.json(successResponse(session));
 };
@@ -41,9 +41,22 @@ exports.refresh = async (req, res, next) => {
   }
 };
 
-exports.logout = (req, res) => {
+exports.logout = async (req, res) => {
+  await authService.logout(parseCookies(req.headers.cookie)[REFRESH_COOKIE]);
   clearRefreshCookie(res);
   return res.status(204).end();
+};
+
+exports.forgotPassword = async (req, res) => {
+  await authService.requestPasswordReset(req.body);
+  return res.status(202).json(successResponse({
+    mensagem: 'Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.',
+  }));
+};
+
+exports.resetPassword = async (req, res) => {
+  await authService.resetPassword(req.body);
+  return res.json(successResponse({ mensagem: 'Senha definida. Entre com a nova senha.' }));
 };
 
 exports.me = async (req, res) => {
@@ -52,7 +65,7 @@ exports.me = async (req, res) => {
 };
 
 exports.changePassword = async (req, res) => {
-  await authService.changeOwnPassword(req.user.sub, req.body);
+  await authService.changeOwnPassword(req.user.sub, req.body, { sessionId: req.user.sid });
   await auditService.record({
     actor: auditService.auditContext(req),
     action: 'alterar_propria_senha',

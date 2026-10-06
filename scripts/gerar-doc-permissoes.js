@@ -2,15 +2,7 @@
 // Uso: npm run docs:permissoes
 const fs = require('node:fs');
 const path = require('node:path');
-const { getPermissionMatrix } = require('../src/config/permissions');
-
-const ROLE_LABELS = {
-  administrador: 'Administrador (Super Admin)',
-  gestor_ong: 'Gestor da ONG',
-  gestor_animais: 'Gestor de animais (Veterinário/Cuidador)',
-  financeiro: 'Financeiro (Atendimento e Doações)',
-  voluntariado: 'Voluntariado (Voluntário)',
-};
+const { getPermissionMatrix, roleLabels } = require('../src/config/permissions');
 
 const MODULE_LABELS = {
   dashboard: 'Visão geral',
@@ -36,7 +28,7 @@ const ACTION_LABELS = {
 
 function buildDocument() {
   const { modules, roles } = getPermissionMatrix();
-  const header = `| Módulo | Ação | ${roles.map((role) => ROLE_LABELS[role.role]).join(' | ')} |`;
+  const header = `| Módulo | Ação | ${roles.map((role) => roleLabels[role.role]).join(' | ')} |`;
   const separator = `| --- | --- | ${roles.map(() => ':---:').join(' | ')} |`;
   const rows = modules.flatMap(({ module, actions }) => actions.map((action) => {
     const cells = roles.map((role) => (role.permissions[module]?.includes(action) ? 'sim' : '—'));

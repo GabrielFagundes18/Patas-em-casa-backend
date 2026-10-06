@@ -9,6 +9,7 @@ const rateLimit = require('../src/middleware/rate-limit');
 const { createLoginThrottle } = require('../src/services/auth/login-throttle');
 const { createAuthService } = require('../src/services/auth/auth-service');
 const { readConfig } = require('../src/config/env');
+const { createFakeSessions } = require('./helpers/fake-sessions');
 
 const user = { id: '11111111-1111-4111-8111-111111111111', nome: 'Carla', email: 'carla@example.org', senha_hash: 'hash', cargo: 'administrador', ativo: true };
 
@@ -66,8 +67,9 @@ test('login is locked after repeated failures, even for unknown e-mails', async 
 });
 
 test('refresh rotates the session and respects the absolute session limit', async () => {
+  const sessions = createFakeSessions();
   const repository = { findByEmail: async () => user, findById: async () => user };
-  const service = createAuthService({ repository, comparePassword: async () => true, throttle: createLoginThrottle() });
+  const service = createAuthService({ repository, comparePassword: async () => true, throttle: createLoginThrottle(), sessions });
 
   const session = await service.login({ email: user.email, password: 'senha forte 123' });
   const renewed = await service.refresh(session.refreshToken);
@@ -83,6 +85,7 @@ test('refresh rotates the session and respects the absolute session limit', asyn
     repository,
     comparePassword: async () => true,
     throttle: createLoginThrottle(),
+    sessions,
     now: () => Date.now() - (sessionMaxHours + 1) * 3600 * 1000,
   });
   const oldSession = await pastLogin.login({ email: user.email, password: 'senha forte 123' });
@@ -91,9 +94,10 @@ test('refresh rotates the session and respects the absolute session limit', asyn
 });
 
 test('refresh is refused for users deactivated after login', async () => {
+  const sessions = createFakeSessions();
   let active = true;
   const repository = { findByEmail: async () => user, findById: async () => ({ ...user, ativo: active }) };
-  const service = createAuthService({ repository, comparePassword: async () => true, throttle: createLoginThrottle() });
+  const service = createAuthService({ repository, comparePassword: async () => true, throttle: createLoginThrottle(), sessions });
   const session = await service.login({ email: user.email, password: 'senha forte 123' });
 
   active = false;
