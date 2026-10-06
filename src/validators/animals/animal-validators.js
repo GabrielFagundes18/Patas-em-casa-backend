@@ -1,6 +1,6 @@
 const { animal } = require('../../config/domain-values');
 const { parsePagination } = require('../../utils/pagination');
-const { UUID_PATTERN, enumDetail } = require('../common-validators');
+const { enumDetail } = require('../common-validators');
 const UPDATE_FIELDS = [
   'nome',
   'especie',
@@ -16,11 +16,13 @@ const UPDATE_FIELDS = [
   'vacinado',
 ];
 
-function validateAnimalId({ params }) {
-  return UUID_PATTERN.test(params.id)
-    ? []
-    : [{ field: 'id', message: 'Informe um identificador válido.' }];
-}
+// Campos de valor fechado (domain-values), validados igual na listagem e no cadastro.
+const ENUM_FIELDS = [
+  ['especie', animal.species],
+  ['sexo', animal.sex],
+  ['porte', animal.size],
+  ['status', animal.status],
+];
 
 function validateListAnimals({ query }) {
   const details = [];
@@ -31,13 +33,7 @@ function validateListAnimals({ query }) {
     details.push(...(error.details || []));
   }
 
-  const enumFields = [
-    ['especie', animal.species],
-    ['sexo', animal.sex],
-    ['porte', animal.size],
-    ['status', animal.status],
-  ];
-  for (const [field, values] of enumFields) {
+  for (const [field, values] of ENUM_FIELDS) {
     if (query[field] !== undefined && typeof query[field] !== 'string') {
       details.push({ field, message: 'Informe um único valor de filtro.' });
       continue;
@@ -92,13 +88,7 @@ function validateAnimalPayload(body, partial) {
     }
   }
 
-  const enumFields = [
-    ['especie', animal.species],
-    ['sexo', animal.sex],
-    ['porte', animal.size],
-    ['status', animal.status],
-  ];
-  for (const [field, values] of enumFields) {
+  for (const [field, values] of ENUM_FIELDS) {
     if (partial && !Object.hasOwn(body, field)) continue;
     if (!partial && field === 'especie' && !body.especie) continue;
     if (['sexo', 'porte'].includes(field) && body[field] === null) continue;
@@ -168,8 +158,6 @@ function validateAnimalStatus({ body }) {
 }
 
 module.exports = {
-  UUID_PATTERN,
-  validateAnimalId,
   validateListAnimals,
   validateCreateAnimal,
   validateUpdateAnimal,

@@ -1,21 +1,12 @@
 const { user } = require('../../config/domain-values');
 const {
-  EMAIL_PATTERN,
+  emailDetail,
   enumDetail,
   listQueryDetails,
   textDetail,
 } = require('../common-validators');
 
 const SORT_FIELDS = ['nome', 'email', 'cargo', 'criado_em'];
-
-function emailDetail(body, required) {
-  if (!Object.hasOwn(body, 'email')) {
-    return required ? { field: 'email', message: 'Informe um e-mail válido.' } : null;
-  }
-  return typeof body.email === 'string' && EMAIL_PATTERN.test(body.email.trim()) && body.email.trim().length <= 150
-    ? null
-    : { field: 'email', message: 'Informe um e-mail válido.' };
-}
 
 function validateListUsers({ query }) {
   const details = listQueryDetails(query, SORT_FIELDS);

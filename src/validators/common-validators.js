@@ -2,6 +2,7 @@ const { parsePagination } = require('../utils/pagination');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9()+\-\s]+$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function enumDetail(value, field, values) {
@@ -38,6 +39,15 @@ function listQueryDetails(query, sortFields) {
   return details;
 }
 
+function emailDetail(body, required) {
+  if (!Object.hasOwn(body, 'email')) {
+    return required ? { field: 'email', message: 'Informe um e-mail válido.' } : null;
+  }
+  return typeof body.email === 'string' && EMAIL_PATTERN.test(body.email.trim()) && body.email.trim().length <= 150
+    ? null
+    : { field: 'email', message: 'Informe um e-mail válido.' };
+}
+
 function textDetail(body, field, { min = 1, max, required = false, message }) {
   if (!Object.hasOwn(body, field) || body[field] === null) {
     return required ? { field, message } : null;
@@ -58,6 +68,8 @@ function isValidDate(value) {
 module.exports = {
   UUID_PATTERN,
   EMAIL_PATTERN,
+  PHONE_PATTERN,
+  emailDetail,
   enumDetail,
   validateIdParam,
   listQueryDetails,

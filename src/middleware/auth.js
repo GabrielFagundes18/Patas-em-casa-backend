@@ -3,9 +3,9 @@ const AppError = require('../utils/app-error');
 const { getPermissionsForRole, hasPermission } = require('../config/permissions');
 const { readConfig } = require('../config/env');
 const userRepository = require('../repositories/auth/user-repository');
+const { UUID_PATTERN } = require('../validators/common-validators');
 
 const { jwtSecret } = readConfig();
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function signToken(payload) {
   return jwt.sign(payload, jwtSecret, {

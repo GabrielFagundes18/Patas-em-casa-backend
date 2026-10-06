@@ -1,6 +1,7 @@
 const { adopter } = require('../../config/domain-values');
 const {
   EMAIL_PATTERN,
+  PHONE_PATTERN,
   enumDetail,
   listQueryDetails,
   textDetail,
@@ -8,7 +9,6 @@ const {
 
 const SORT_FIELDS = ['nome', 'criado_em', 'cidade', 'status'];
 const STATE_PATTERN = /^[A-Z]{2}$/;
-const PHONE_PATTERN = /^[0-9()+\-\s]+$/;
 
 function validateListAdopters({ query }) {
   const details = listQueryDetails(query, SORT_FIELDS);

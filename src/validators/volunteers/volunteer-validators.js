@@ -1,6 +1,7 @@
 const { volunteer } = require('../../config/domain-values');
 const {
-  EMAIL_PATTERN,
+  PHONE_PATTERN,
+  emailDetail,
   enumDetail,
   isValidDate,
   listQueryDetails,
@@ -8,7 +9,6 @@ const {
 } = require('../common-validators');
 
 const SORT_FIELDS = ['nome', 'criado_em', 'data_inicio', 'status'];
-const PHONE_PATTERN = /^[0-9()+\-\s]+$/;
 
 function phoneDetail(body, required) {
   if (!Object.hasOwn(body, 'telefone') || body.telefone === null || body.telefone === '') {
@@ -30,13 +30,6 @@ function areasDetail(body, required) {
     return { field: 'areas', message: `Escolha áreas válidas: ${volunteer.areas.join(', ')}.` };
   }
   return null;
-}
-
-function emailDetail(body, required) {
-  if (!Object.hasOwn(body, 'email')) return required ? { field: 'email', message: 'Informe um e-mail válido.' } : null;
-  return typeof body.email === 'string' && EMAIL_PATTERN.test(body.email.trim()) && body.email.trim().length <= 150
-    ? null
-    : { field: 'email', message: 'Informe um e-mail válido.' };
 }
 
 function validateListVolunteers({ query }) {

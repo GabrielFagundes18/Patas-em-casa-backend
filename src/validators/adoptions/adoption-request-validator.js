@@ -1,7 +1,5 @@
-const { UUID_PATTERN } = require('../animals/animal-validators');
+const { EMAIL_PATTERN, PHONE_PATTERN, UUID_PATTERN } = require('../common-validators');
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[0-9()+\-\s]+$/;
 const MAX_ROUTINE_LENGTH = 2000;
 
 // Limites alinhados às colunas de adotantes (nome 150, email 150, telefone 20, cidade 100).
