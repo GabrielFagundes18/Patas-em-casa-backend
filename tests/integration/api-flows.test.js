@@ -1,5 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const os = require('node:os');
+const fsSync = require('node:fs');
+const pathModule = require('node:path');
+
+// Fotos do teste vão para uma pasta temporária (a configuração é lida quando o app é carregado).
+process.env.UPLOAD_DIR = fsSync.mkdtempSync(pathModule.join(os.tmpdir(), 'patas-integracao-uploads-'));
+test.after(() => fsSync.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true }));
 const bcrypt = require('bcryptjs');
 require('../../src/config/env');
 const pool = require('../../src/db/db');
@@ -165,6 +172,47 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
       let approvedAdopterId;
       let rejectedAdopterId;
 
+      await t.test('fotos: upload, arquivo servido, principal, remoção e temperamento no perfil público', async () => {
+        const animal = await createAnimal('Integração Fotos');
+        const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cf000000030101005f4f8d3f0000000049454e44ae426082', 'hex');
+        const upload = async (files) => {
+          const form = new FormData();
+          for (const [name, content, type] of files) form.append('fotos', new Blob([content], { type }), name);
+          const response = await fetch(`${baseUrl}/api/v1/animals/${animal.id}/photos`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+          return { status: response.status, data: await response.json() };
+        };
+
+        const sent = await upload([['nino.png', png, 'image/png'], ['nino-2.png', png, 'image/png']]);
+        assert.equal(sent.status, 201);
+        const [first, second] = sent.data.data.fotos;
+        assert.equal(first.principal, true);
+        assert.equal(sent.data.data.foto_url, first.url);
+
+        const file = await fetch(`${baseUrl}${new URL(first.url).pathname}`);
+        assert.equal(file.status, 200);
+        assert.equal(file.headers.get('content-type'), 'image/png');
+        assert.equal(file.headers.get('cross-origin-resource-policy'), 'cross-origin');
+
+        const fake = await upload([['foto.png', Buffer.from('<script>alert(1)</script>'), 'image/png']]);
+        assert.equal(fake.status, 422);
+        assert.equal(fake.data.error.code, 'ARQUIVO_INVALIDO');
+
+        const withTraits = await request('PUT', `/api/v1/animals/${animal.id}`, { body: { temperamento: ['calmo', 'convive com gatos'] } });
+        assert.equal(withTraits.status, 200);
+        const principal = await request('PATCH', `/api/v1/animals/${animal.id}/photos/${second.id}/principal`);
+        assert.equal(principal.data.data.foto_url, second.url);
+        const removed = await request('DELETE', `/api/v1/animals/${animal.id}/photos/${first.id}`);
+        assert.equal(removed.data.data.fotos.length, 1);
+        assert.equal((await fetch(`${baseUrl}${new URL(first.url).pathname}`)).status, 404);
+
+        const publicView = await request('GET', `/api/v1/public/animals/${animal.id}`, { auth: false });
+        assert.deepEqual(publicView.data.data.temperamento, ['calmo', 'convive com gatos']);
+        assert.deepEqual(publicView.data.data.fotos.map((foto) => foto.url), [second.url]);
+
+        await request('DELETE', `/api/v1/animals/${animal.id}`);
+        assert.equal((await fetch(`${baseUrl}${new URL(second.url).pathname}`)).status, 404);
+      });
+
       await t.test('adoção: pedido público, triagem, aprovação em transação e termo', async () => {
         const animal = await createAnimal('Integração Adoção');
         const first = await publicAdoptionRequest(animal.id, `primeiro${EMAIL_SUFFIX}`);
@@ -205,6 +253,10 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
 
         const decidedAgain = await request('POST', `/api/v1/adoption-requests/${firstRequest.id}/reject`, { body: { justificativa: 'Tentativa de decidir de novo.' } });
         assert.equal(decidedAgain.status, 409);
+
+        const adoptedProfile = await request('GET', `/api/v1/public/animals/${animal.id}`, { auth: false });
+        assert.equal(adoptedProfile.status, 410);
+        assert.equal(adoptedProfile.data.error.message, 'Integração Adoção já encontrou um lar.');
 
         const signed = await request('POST', `/api/v1/adoption-requests/${firstRequest.id}/term-signed`);
         assert.equal(signed.data.data.termo_assinado, true);

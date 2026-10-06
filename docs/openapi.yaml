@@ -400,6 +400,51 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Csv' }
         '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/animals/{id}/photos:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Animais]
+      summary: Enviar fotos para a galeria do animal
+      description: |
+        Permissão: animals:update. multipart/form-data, campo "fotos" (até 10 por vez, 5 MB cada, até 12 por animal).
+        Só JPG, PNG ou WebP, conferidos pelo conteúdo. Os arquivos ficam em UPLOAD_DIR e são servidos em
+        API_PUBLIC_URL/uploads/animais/<arquivo>. A primeira foto de um animal sem principal vira a principal
+        e passa a ser o foto_url. Auditado.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                fotos: { type: array, items: { type: string, format: binary } }
+      responses:
+        '201': { description: 'Animal com fotos: [{ id, url, principal, ordem }]' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { description: 'ARQUIVO_INVALIDO ou LIMITE_DE_FOTOS' }
+  /api/v1/animals/{id}/photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      tags: [Animais]
+      summary: Remover foto (apaga o arquivo; a próxima vira principal)
+      description: 'Permissão: animals:update. Auditado.'
+      responses:
+        '200': { description: Animal com a galeria atualizada }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/animals/{id}/photos/{photoId}/principal:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+      - { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Animais]
+      summary: Definir a foto principal (vira o foto_url)
+      description: 'Permissão: animals:update. Auditado.'
+      responses:
+        '200': { description: Animal com a galeria atualizada }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/animals/{id}:
     parameters:
       - $ref: '#/components/parameters/Id'
@@ -1089,11 +1134,12 @@ paths:
       - $ref: '#/components/parameters/Id'
     get:
       tags: [Público]
-      summary: Ficha pública do animal
+      summary: Ficha pública do animal (com galeria e temperamento)
       security: []
       responses:
-        '200': { description: Animal disponível ou urgente }
+        '200': { description: 'Animal disponível ou urgente, com fotos: [{ id, url, principal }] e temperamento: [texto]' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: 'ANIMAL_INDISPONIVEL — já adotado ou em processo de adoção; a mensagem traz o nome' }
   /api/v1/public/stories:
     get:
       tags: [Público]
@@ -1347,6 +1393,7 @@ components:
         data_entrada: { type: string, format: date }
         castrado: { type: boolean }
         vacinado: { type: boolean }
+        temperamento: { type: array, maxItems: 10, items: { type: string, maxLength: 40 }, example: [brincalhão, convive com gatos] }
         criado_em: { type: string, format: date-time }
         atualizado_em: { type: string, format: date-time }
     AnimalInput:

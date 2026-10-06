@@ -4,7 +4,7 @@ const AppError = require('../src/utils/app-error');
 const { createAnimalService: createService } = require('../src/services/animals/animal-service');
 
 const noAudit = { record: async () => {} };
-const createAnimalService = (repository) => createService(repository, { audit: noAudit });
+const createAnimalService = (repository, options = {}) => createService(repository, { audit: noAudit, ...options });
 
 const animalRecord = { id: 'a1', nome: 'Nino', especie: 'cachorro', status: 'disponivel' };
 
@@ -70,7 +70,7 @@ test('animal delete maps foreign key conflicts to a stable conflict error', asyn
       error.code = '23503';
       throw error;
     },
-  });
+  }, { media: { listForAnimal: async () => [] } });
 
   await assert.rejects(service.remove('a1'), (error) => {
     assert.ok(error instanceof AppError);

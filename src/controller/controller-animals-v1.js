@@ -30,7 +30,7 @@ exports.exportCsv = async (req, res) => {
 };
 
 exports.getById = async (req, res) => {
-  return res.json(successResponse(await animalService.getById(req.params.id)));
+  return res.json(successResponse(await animalService.getDetail(req.params.id)));
 };
 
 exports.create = async (req, res) => {
@@ -49,4 +49,16 @@ exports.updateStatus = async (req, res) => {
 exports.remove = async (req, res) => {
   await animalService.remove(req.params.id, auditContext(req));
   return res.status(204).end();
+};
+
+exports.addPhotos = async (req, res) => {
+  return res.status(201).json(successResponse(await animalService.addPhotos(req.params.id, req.files, auditContext(req))));
+};
+
+exports.setPrincipalPhoto = async (req, res) => {
+  return res.json(successResponse(await animalService.setPrincipalPhoto(req.params.id, req.params.photoId, auditContext(req))));
+};
+
+exports.removePhoto = async (req, res) => {
+  return res.json(successResponse(await animalService.removePhoto(req.params.id, req.params.photoId, auditContext(req))));
 };

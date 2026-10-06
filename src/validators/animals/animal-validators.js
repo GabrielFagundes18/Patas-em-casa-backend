@@ -1,6 +1,6 @@
 const { animal } = require('../../config/domain-values');
 const { parsePagination } = require('../../utils/pagination');
-const { enumDetail } = require('../common-validators');
+const { UUID_PATTERN, enumDetail } = require('../common-validators');
 const UPDATE_FIELDS = [
   'nome',
   'especie',
@@ -14,7 +14,11 @@ const UPDATE_FIELDS = [
   'data_entrada',
   'castrado',
   'vacinado',
+  'temperamento',
 ];
+
+const MAX_TEMPERAMENT_TRAITS = 10;
+const MAX_TRAIT_LENGTH = 40;
 
 // Campos de valor fechado (domain-values), validados igual na listagem e no cadastro.
 const ENUM_FIELDS = [
@@ -120,6 +124,18 @@ function validateAnimalPayload(body, partial) {
     }
   }
 
+  // Temperamento: lista curta de traços (ex.: "brincalhão", "convive com gatos").
+  if (Object.hasOwn(body, 'temperamento')) {
+    const traits = body.temperamento;
+    if (!Array.isArray(traits) || traits.length > MAX_TEMPERAMENT_TRAITS
+      || traits.some((trait) => typeof trait !== 'string' || !trait.trim() || trait.trim().length > MAX_TRAIT_LENGTH)) {
+      details.push({
+        field: 'temperamento',
+        message: `Informe até ${MAX_TEMPERAMENT_TRAITS} traços de até ${MAX_TRAIT_LENGTH} caracteres cada.`,
+      });
+    }
+  }
+
   if (Object.hasOwn(body, 'data_entrada')) {
     const value = body.data_entrada;
     const date = typeof value === 'string' ? new Date(`${value}T00:00:00.000Z`) : null;
@@ -142,6 +158,12 @@ function validateUpdateAnimal({ body }) {
   return [...validateAnimalPayload(body, true), ...validateReason(body)];
 }
 
+function validatePhotoParams({ params }) {
+  return [params.id, params.photoId].every((value) => UUID_PATTERN.test(value))
+    ? []
+    : [{ field: 'id', message: 'Informe identificadores válidos.' }];
+}
+
 function validateReason(body) {
   if (body.motivo !== undefined && (typeof body.motivo !== 'string' || body.motivo.length > 500)) {
     return [{ field: 'motivo', message: 'Descreva o motivo em até 500 caracteres.' }];
@@ -158,6 +180,7 @@ function validateAnimalStatus({ body }) {
 }
 
 module.exports = {
+  validatePhotoParams,
   validateListAnimals,
   validateCreateAnimal,
   validateUpdateAnimal,

@@ -11,6 +11,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json server.js ./
 COPY src ./src
 COPY scripts ./scripts
+# Fotos enviadas pelo painel (UPLOAD_DIR). Monte um volume aqui para não perdê-las a cada deploy.
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+VOLUME ["/app/uploads"]
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

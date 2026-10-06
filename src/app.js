@@ -1,3 +1,4 @@
+const path = require('node:path');
 const express = require('express');
 const cors = require('cors');
 
@@ -35,6 +36,16 @@ app.use(
   })
 );
 app.use(express.json({ limit: '1mb' }));
+
+// Fotos enviadas pelo painel. Nomes são UUIDs (conteúdo nunca muda): cache longo. Podem ser exibidas
+// pelo site em outra origem, por isso Cross-Origin-Resource-Policy cross-origin só aqui.
+app.use('/uploads', express.static(path.resolve(config.uploadDir), {
+  index: false,
+  dotfiles: 'deny',
+  immutable: true,
+  maxAge: '365d',
+  setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+}));
 
 app.use('/', healthRouter);
 app.use('/api/v1', rateLimit({ windowMs: 5 * 60 * 1000, max: 1000 }));

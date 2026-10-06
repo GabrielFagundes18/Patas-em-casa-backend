@@ -10,9 +10,12 @@ const SORT_COLUMNS = Object.freeze({
   porte: 'porte',
 });
 
+const ANIMAL_COLUMNS = `id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
+  foto_url, data_entrada, castrado, vacinado, temperamento, criado_em, atualizado_em`;
+
 const UPDATABLE_COLUMNS = new Set([
   'nome', 'especie', 'raca', 'sexo', 'idade_anos', 'porte', 'status',
-  'descricao', 'foto_url', 'data_entrada', 'castrado', 'vacinado',
+  'descricao', 'foto_url', 'data_entrada', 'castrado', 'vacinado', 'temperamento',
 ]);
 
 function buildWhere(filters) {
@@ -41,8 +44,7 @@ async function list(filters) {
   const sortColumn = SORT_COLUMNS[filters.sort] || SORT_COLUMNS.data_entrada;
   const sortOrder = filters.order === 'asc' ? 'ASC' : 'DESC';
   const result = await pool.query(
-    `SELECT id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
-            foto_url, data_entrada, castrado, vacinado, criado_em, atualizado_em
+    `SELECT ${ANIMAL_COLUMNS}
      FROM animais ${clause}
      ORDER BY ${sortColumn} ${sortOrder} NULLS LAST, id ASC
      LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -57,8 +59,7 @@ async function listForExport(filters, maxRows) {
   const sortColumn = SORT_COLUMNS[filters.sort] || SORT_COLUMNS.data_entrada;
   const sortOrder = filters.order === 'asc' ? 'ASC' : 'DESC';
   const result = await pool.query(
-    `SELECT id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
-            foto_url, data_entrada, castrado, vacinado, criado_em, atualizado_em
+    `SELECT ${ANIMAL_COLUMNS}
      FROM animais ${clause}
      ORDER BY ${sortColumn} ${sortOrder} NULLS LAST, id ASC
      LIMIT $${values.length + 1}`,
@@ -69,8 +70,7 @@ async function listForExport(filters, maxRows) {
 
 async function findById(id) {
   const result = await pool.query(
-    `SELECT id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
-            foto_url, data_entrada, castrado, vacinado, criado_em, atualizado_em
+    `SELECT ${ANIMAL_COLUMNS}
      FROM animais WHERE id = $1 LIMIT 1`,
     [id]
   );
@@ -81,10 +81,9 @@ async function create(animal) {
   const result = await pool.query(
     `INSERT INTO animais
       (nome, especie, raca, sexo, idade_anos, porte, status, descricao, foto_url,
-       data_entrada, castrado, vacinado)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-     RETURNING id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
-               foto_url, data_entrada, castrado, vacinado, criado_em, atualizado_em`,
+       data_entrada, castrado, vacinado, temperamento)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     RETURNING ${ANIMAL_COLUMNS}`,
     [
       animal.nome,
       animal.especie,
@@ -98,6 +97,7 @@ async function create(animal) {
       animal.data_entrada,
       animal.castrado,
       animal.vacinado,
+      animal.temperamento || [],
     ]
   );
   return result.rows[0];
@@ -109,8 +109,7 @@ async function update(id, changes) {
 
   const result = await pool.query(
     `UPDATE animais SET ${update.set} WHERE id = ${update.idParam}
-     RETURNING id, nome, especie, raca, sexo, idade_anos, porte, status, descricao,
-               foto_url, data_entrada, castrado, vacinado, criado_em, atualizado_em`,
+     RETURNING ${ANIMAL_COLUMNS}`,
     update.values
   );
   return result.rows[0] || null;
