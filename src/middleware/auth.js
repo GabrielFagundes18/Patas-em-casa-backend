@@ -1,0 +1,63 @@
+const jwt = require('jsonwebtoken');
+const AppError = require('../utils/app-error');
+const { getPermissionsForRole, hasPermission } = require('../config/permissions');
+const { readConfig } = require('../config/env');
+const userRepository = require('../repositories/auth/user-repository');
+
+const { jwtSecret } = readConfig();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function signToken(payload) {
+  return jwt.sign(payload, jwtSecret, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+  });
+}
+
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return next(new AppError(401, 'NAO_AUTENTICADO', 'Sessão expirada ou não autenticada.'));
+  }
+
+  let payload;
+  try {
+    payload = jwt.verify(token, jwtSecret);
+  } catch (error) {
+    return next(new AppError(401, 'TOKEN_INVALIDO', 'Token inválido ou expirado.'));
+  }
+
+  try {
+    // Cargo e situação vêm do banco a cada requisição, e não do token: troca de cargo
+    // e desativação valem imediatamente, sem esperar o token expirar.
+    const user = UUID_PATTERN.test(String(payload.sub))
+      ? await userRepository.findById(payload.sub)
+      : null;
+
+    if (!user || !user.ativo || getPermissionsForRole(user.cargo).length === 0) {
+      return next(new AppError(401, 'SESSAO_INVALIDA', 'Sessão expirada ou não autenticada.'));
+    }
+
+    req.user = { sub: user.id, email: user.email, nome: user.nome, role: user.cargo };
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function requirePermission(permission) {
+  return function permissionMiddleware(req, res, next) {
+    if (!req.user) {
+      return next(new AppError(401, 'NAO_AUTENTICADO', 'Sessão expirada ou não autenticada.'));
+    }
+
+    if (!hasPermission(req.user.role, permission)) {
+      return next(new AppError(403, 'SEM_PERMISSAO', 'Você não tem permissão para esta ação.'));
+    }
+
+    return next();
+  };
+}
+
+module.exports = { signToken, requireAuth, requirePermission };

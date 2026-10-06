@@ -1,0 +1,45 @@
+name: API Patas em Casa
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: patas
+          POSTGRES_PASSWORD: patas
+          POSTGRES_DB: patas_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U patas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://patas:patas@localhost:5432/patas_teste?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Auditoria de dependências
+        run: npm audit --omit=dev --audit-level=high
+      - name: Verificação de sintaxe
+        run: find src scripts server.js -name '*.js' -exec node --check {} +
+      - name: Testes unitários e HTTP
+        run: npm test
+      - name: Schema base no banco de teste
+        run: psql "postgresql://patas:patas@localhost:5432/patas_teste" -v ON_ERROR_STOP=1 -f migrations/000-patas-em-casa-schema.sql
+      - name: Testes de integração
+        run: npm run test:integration
+      - name: Imagem Docker
+        run: docker build -t patas-em-casa-api .

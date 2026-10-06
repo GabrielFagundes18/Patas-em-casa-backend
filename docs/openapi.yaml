@@ -1,0 +1,1499 @@
+openapi: 3.0.3
+info:
+  title: Patas em Casa API
+  version: 1.0.0
+  description: |
+    API do site público e do painel administrativo da ONG Patas em Casa.
+
+    **Contrato comum**
+    - Prefixo `/api/v1`, JSON UTF-8, datas ISO 8601 (UTC); colunas DATE em `AAAA-MM-DD`; moeda como número decimal.
+    - Sucesso: `{ "data": ..., "meta": {...} }`. Listas: `meta` com `page`, `pageSize`, `total`, `totalPages`
+      (`pageSize` padrão 20, máximo 100).
+    - Erro: `{ "error": { "code": "CODIGO_ESTAVEL", "message": "texto em português", "details": [{ "field", "message" }] } }`.
+    - Autenticação: `Authorization: Bearer <token>` (token de acesso de 15 min). A renovação usa o cookie
+      `patas_refresh` (httpOnly, SameSite=Strict, Path=/api/v1/auth) e exige o cabeçalho `X-Requested-With: XMLHttpRequest`.
+    - Autorização: matriz única módulo × ação (`docs/permissoes.md`). Cargo e situação do usuário são lidos
+      do banco a cada requisição.
+    - Dados pessoais de adotantes saem mascarados; o valor completo exige `adopters:reveal` e gera auditoria.
+    - Limites: 1000 requisições/5 min por IP na API, 20 logins/15 min por IP e 10 envios/hora por IP nos formulários públicos.
+servers:
+  - url: http://localhost:4000
+    description: Desenvolvimento
+tags:
+  - name: Saúde
+  - name: Autenticação
+  - name: Equipe
+  - name: Visão geral
+  - name: Animais
+  - name: Pedidos de adoção
+  - name: Adotantes
+  - name: Doações
+  - name: Voluntários
+  - name: Histórias
+  - name: Público
+
+paths:
+  /:
+    get:
+      tags: [Saúde]
+      summary: Identificação da API (nome, versão e ambiente)
+      security: []
+      responses:
+        '200': { description: Informações da API }
+  /health:
+    get:
+      tags: [Saúde]
+      summary: Processo vivo
+      security: []
+      responses:
+        '200':
+          description: API no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  status: { type: string, example: ok }
+                  timestamp: { type: string, format: date-time }
+  /ready:
+    get:
+      tags: [Saúde]
+      summary: Pronta para receber tráfego (testa o banco)
+      security: []
+      responses:
+        '200': { description: Banco acessível }
+        '503': { description: Banco indisponível }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Autenticação]
+      summary: Entrar com e-mail e senha
+      description: |
+        Devolve o token de acesso e define o cookie de renovação. Após 5 falhas seguidas para o mesmo e-mail,
+        o acesso fica bloqueado por tempo crescente (15 min, 30 min, ... até 4 h). A resposta não revela se o e-mail existe.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Sessão criada (cabeçalho Set-Cookie com patas_refresh)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/auth/refresh:
+    post:
+      tags: [Autenticação]
+      summary: Renovar a sessão
+      description: Rotaciona o cookie de renovação. Expira após SESSION_IDLE_MINUTES sem uso e SESSION_MAX_HOURS desde o login.
+      security:
+        - refreshCookie: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestedWith'
+      responses:
+        '200':
+          description: Novo token de acesso
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/auth/logout:
+    post:
+      tags: [Autenticação]
+      summary: Sair (apaga o cookie de renovação)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestedWith'
+      responses:
+        '204': { description: Sessão encerrada }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/me:
+    get:
+      tags: [Autenticação]
+      summary: Usuário logado, cargo e permissões
+      responses:
+        '200':
+          description: Usuário atual
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/v1/me/password:
+    patch:
+      tags: [Autenticação]
+      summary: Trocar a própria senha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [senha_atual, nova_senha]
+              properties:
+                senha_atual: { type: string }
+                nova_senha: { type: string, description: 'Mínimo de 10 caracteres, com letras e números; até 72 bytes.' }
+      responses:
+        '204': { description: Senha alterada (auditado) }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/users:
+    get:
+      tags: [Equipe]
+      summary: Listar a equipe
+      description: 'Permissão: team:read.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - { name: cargo, in: query, schema: { $ref: '#/components/schemas/Role' } }
+        - { name: ativo, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: sort, in: query, schema: { type: string, enum: [nome, email, cargo, criado_em] } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserList' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Equipe]
+      summary: Criar usuário da equipe
+      description: 'Permissão: team:create. A senha inicial segue a política de senha forte.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome, email, cargo, senha]
+              properties:
+                nome: { type: string, maxLength: 150 }
+                email: { type: string, format: email }
+                cargo: { $ref: '#/components/schemas/Role' }
+                senha: { type: string }
+                ativo: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Equipe]
+      summary: Detalhe do usuário
+      description: 'Permissão: team:read.'
+      responses:
+        '200':
+          description: Usuário
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Equipe]
+      summary: Editar, trocar cargo, ativar ou desativar
+      description: |
+        Permissão: team:update. Ninguém altera o próprio cargo nem se desativa (ALTERACAO_PROPRIA_BLOQUEADA) e
+        sempre resta ao menos um administrador ativo (ULTIMO_ADMINISTRADOR). Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome: { type: string }
+                email: { type: string, format: email }
+                cargo: { $ref: '#/components/schemas/Role' }
+                ativo: { type: boolean }
+      responses:
+        '200':
+          description: Usuário atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/users/{id}/password:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Equipe]
+      summary: Redefinir a senha de um usuário
+      description: 'Permissão: team:update. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nova_senha]
+              properties:
+                nova_senha: { type: string }
+      responses:
+        '204': { description: Senha redefinida }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/permissions:
+    get:
+      tags: [Equipe]
+      summary: Matriz de permissões por cargo
+      description: 'Permissão: team:read.'
+      responses:
+        '200':
+          description: Matriz módulo × ação
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/PermissionMatrix' }
+
+  /api/v1/dashboard/summary:
+    get:
+      tags: [Visão geral]
+      summary: Indicadores, gráficos e agenda do painel
+      description: |
+        Permissão: dashboard:read. Usa as views vw_kpis_gerais e vw_doacoes_por_mes. Cache de 15 s;
+        `atualizar=true` força nova leitura. A data de aprovação das adoções é aproximada por atualizado_em
+        até a migração 004 (campos de decisão e agenda).
+      parameters:
+        - { name: atualizar, in: query, schema: { type: string, enum: ['true'] } }
+      responses:
+        '200':
+          description: Resumo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DashboardSummary' }
+
+  /api/v1/animals:
+    get:
+      tags: [Animais]
+      summary: Listar animais
+      description: 'Permissão: animals:read.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/AnimalSpecies'
+        - $ref: '#/components/parameters/AnimalSex'
+        - $ref: '#/components/parameters/AnimalSize'
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/AnimalStatus' } }
+        - { name: castrado, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: vacinado, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: idadeMin, in: query, schema: { type: number } }
+        - { name: idadeMax, in: query, schema: { type: number } }
+        - { name: sort, in: query, schema: { type: string, enum: [nome, data_entrada, idade_anos, status, especie, porte] } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimalList' }
+    post:
+      tags: [Animais]
+      summary: Cadastrar animal
+      description: 'Permissão: animals:create. Status inicial "adotado" só para administrador. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnimalInput' }
+      responses:
+        '201':
+          description: Animal criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimalEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/animals/export:
+    get:
+      tags: [Animais]
+      summary: Exportar animais em CSV
+      description: 'Permissão: animals:export. Aceita os mesmos filtros da listagem; máximo de 10.000 linhas.'
+      responses:
+        '200': { $ref: '#/components/responses/Csv' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/animals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Animais]
+      summary: Detalhe do animal
+      description: 'Permissão: animals:read.'
+      responses:
+        '200':
+          description: Animal
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimalEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Animais]
+      summary: Editar animal
+      description: 'Permissão: animals:update. Mudanças de status seguem a máquina de estados. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AnimalInput'
+                - type: object
+                  properties:
+                    motivo: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Animal atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimalEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Animais]
+      summary: Excluir animal
+      description: 'Permissão: animals:delete. Animais com pedidos vinculados não podem ser excluídos (409). Auditado.'
+      responses:
+        '204': { description: Excluído }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/animals/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    patch:
+      tags: [Animais]
+      summary: Mudar o status do animal
+      description: |
+        Permissão: animals:update. Transições permitidas — disponivel → urgente, em_processo, inativo;
+        urgente → disponivel, em_processo, inativo; em_processo → disponivel, urgente, adotado (só administrador), inativo;
+        adotado → disponivel (devolução, só administrador); inativo → disponivel, urgente.
+        Motivo obrigatório para inativar e para devolução. Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/AnimalStatus' }
+                motivo: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Status alterado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimalEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/adoption-requests:
+    get:
+      tags: [Pedidos de adoção]
+      summary: Listar pedidos (tabela)
+      description: 'Permissão: adoptions:read. Contatos do adotante saem mascarados.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - { name: status, in: query, description: 'Um ou mais status separados por vírgula', schema: { type: string, example: 'novo,em_analise' } }
+        - { name: prioridade, in: query, schema: { $ref: '#/components/schemas/Priority' } }
+        - { name: responsavel_id, in: query, description: 'UUID do responsável ou "nenhum"', schema: { type: string } }
+        - { name: animal_id, in: query, schema: { type: string, format: uuid } }
+        - { name: adotante_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/De'
+        - $ref: '#/components/parameters/Ate'
+        - { name: sort, in: query, schema: { type: string, enum: [data_pedido, atualizado_em, status, prioridade] } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdoptionRequestList' }
+  /api/v1/adoption-requests/board:
+    get:
+      tags: [Pedidos de adoção]
+      summary: Kanban por status
+      description: 'Permissão: adoptions:read. Até 50 pedidos por coluna, ordenados por prioridade; reprovados só com incluir_reprovados=true.'
+      parameters:
+        - { name: incluir_reprovados, in: query, schema: { type: string, enum: ['true', 'false'] } }
+      responses:
+        '200':
+          description: Colunas do kanban
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      columns:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status: { $ref: '#/components/schemas/AdoptionStatus' }
+                            total: { type: integer }
+                            items: { type: array, items: { $ref: '#/components/schemas/AdoptionRequestSummary' } }
+  /api/v1/adoption-requests/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Pedidos de adoção]
+      summary: Detalhe do pedido
+      description: 'Permissão: adoptions:read. Observações com contatos mascarados.'
+      responses:
+        '200':
+          description: Pedido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdoptionRequestEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Pedidos de adoção]
+      summary: Mover no kanban, atribuir responsável, prioridade e anotar
+      description: |
+        Permissão: adoptions:update. Status permitido: novo, em_analise, visita_agendada (decisões usam approve/reject).
+        Ir para visita_agendada atualiza o adotante. Pedidos decididos aceitam só anotações. Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [novo, em_analise, visita_agendada] }
+                prioridade: { $ref: '#/components/schemas/Priority' }
+                responsavel_id: { type: string, format: uuid, nullable: true }
+                nota: { type: string, maxLength: 2000 }
+      responses:
+        '200':
+          description: Pedido atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdoptionRequestEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/adoption-requests/{id}/reveal:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Pedidos de adoção]
+      summary: Revelar contatos e observações completas
+      description: 'Permissão: adopters:reveal. Auditado.'
+      responses:
+        '200': { description: Dados completos do pedido }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/adoption-requests/{id}/approve:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Pedidos de adoção]
+      summary: Aprovar (transação)
+      description: |
+        Permissão: adoptions:approve. Em uma transação: pedido → aprovado, animal → adotado, adotante → adotante,
+        demais pedidos abertos do animal → reprovado automaticamente. Justificativa obrigatória. Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Decision' }
+      responses:
+        '200':
+          description: Pedido aprovado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdoptionRequestEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/adoption-requests/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Pedidos de adoção]
+      summary: Reprovar (transação)
+      description: |
+        Permissão: adoptions:approve. Sem outros pedidos abertos, o animal em processo volta a disponível e o
+        candidato fica inativo. Justificativa obrigatória. Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Decision' }
+      responses:
+        '200':
+          description: Pedido reprovado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdoptionRequestEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/v1/adoption-requests/{id}/schedule:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Pedidos de adoção]
+      summary: Agendar visita ou entrevista e avisar o adotante por e-mail
+      description: |
+        Permissão: adoptions:update. Só para pedidos abertos. Visita move o pedido para visita_agendada;
+        entrevista tira o pedido de "novo" (vai para em_analise). O compromisso fica no histórico do pedido.
+        Com enviar_email=true, o adotante recebe um e-mail (SMTP do .env) depois de gravar; se o envio falhar
+        ou o SMTP não estiver configurado, o agendamento continua salvo e "email.enviado" volta false. Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Schedule' }
+      responses:
+        '200':
+          description: Agendamento salvo (com o resultado do e-mail, quando pedido)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScheduleResultEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/adoption-requests/{id}/term-signed:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Pedidos de adoção]
+      summary: Marcar o Termo de Adoção como assinado
+      description: 'Permissão: adoptions:update. Só para pedidos aprovados e uma única vez. Auditado.'
+      responses:
+        '200':
+          description: Termo marcado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdoptionRequestEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/v1/adopters:
+    get:
+      tags: [Adotantes]
+      summary: Listar adotantes (contatos mascarados)
+      description: 'Permissão: adopters:read. A busca aceita nome, e-mail ou dígitos do telefone.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - { name: status, in: query, schema: { type: string, enum: [em_analise, visita_agendada, adotante, inativo] } }
+        - { name: cidade, in: query, schema: { type: string } }
+        - { name: estado, in: query, schema: { type: string, pattern: '^[A-Z]{2}$' } }
+        - { name: sort, in: query, schema: { type: string, enum: [nome, criado_em, cidade, status] } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdopterList' }
+  /api/v1/adopters/export:
+    get:
+      tags: [Adotantes]
+      summary: Exportar adotantes em CSV
+      description: 'Permissão: adopters:export. Contatos completos só para quem tem adopters:reveal. Auditado.'
+      responses:
+        '200': { $ref: '#/components/responses/Csv' }
+  /api/v1/adopters/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Adotantes]
+      summary: Ficha do adotante com histórico (pedidos, doações, histórias)
+      description: 'Permissão: adopters:read.'
+      responses:
+        '200': { description: Adotante mascarado com histórico }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Adotantes]
+      summary: Editar adotante
+      description: 'Permissão: adopters:update. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome: { type: string }
+                email: { type: string, format: email }
+                telefone: { type: string, nullable: true }
+                cidade: { type: string, nullable: true }
+                estado: { type: string, pattern: '^[A-Z]{2}$', nullable: true }
+                endereco: { type: string, nullable: true }
+                status: { type: string, enum: [em_analise, visita_agendada, adotante, inativo] }
+      responses:
+        '200': { description: Adotante atualizado (mascarado) }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Adotantes]
+      summary: Excluir dados do titular (LGPD)
+      description: |
+        Permissão: lgpd:approve. Exige confirmacao = "EXCLUIR" e nenhum pedido em andamento. Doações e histórias
+        vinculadas são anonimizadas; pedidos do titular são excluídos. Irreversível. Auditado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Confirmation' }
+      responses:
+        '204': { description: Dados excluídos }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/adopters/{id}/reveal:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Adotantes]
+      summary: Revelar e-mail, telefone e endereço
+      description: 'Permissão: adopters:reveal. Auditado.'
+      responses:
+        '200': { description: Contatos completos }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/adopters/{id}/lgpd-export:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Adotantes]
+      summary: Exportar todos os dados do titular (LGPD)
+      description: 'Permissão: lgpd:approve. Documento JSON para download. Auditado.'
+      responses:
+        '200': { description: Dados do titular, pedidos, doações e histórias }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/adopters/{id}/anonymize:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Adotantes]
+      summary: Anonimizar titular (LGPD)
+      description: |
+        Permissão: lgpd:approve. Exige confirmacao = "ANONIMIZAR" e nenhum pedido em andamento. Mantém registros e
+        estatísticas sem identificação; despublica histórias vinculadas. Irreversível. Auditado sem os valores antigos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Confirmation' }
+      responses:
+        '200': { description: Titular anonimizado }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/donations:
+    get:
+      tags: [Doações]
+      summary: Listar doações
+      description: 'Permissão: donations:read. E-mail do doador mascarado na lista.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - { name: tipo, in: query, schema: { type: string, enum: [unica, recorrente] } }
+        - { name: metodo, in: query, schema: { type: string, enum: [pix, cartao, boleto, transferencia] } }
+        - { name: status, in: query, schema: { type: string, enum: [pendente, confirmada, cancelada] } }
+        - { name: adotante_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/De'
+        - $ref: '#/components/parameters/Ate'
+        - { name: sort, in: query, schema: { type: string, enum: [data, valor, doador_nome, status] } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationList' }
+    post:
+      tags: [Doações]
+      summary: Registrar doação
+      description: 'Permissão: donations:create. Status padrão "confirmada". Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationInput' }
+      responses:
+        '201':
+          description: Doação registrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/donations/summary:
+    get:
+      tags: [Doações]
+      summary: Totais por status, método e tipo
+      description: 'Permissão: donations:read. Somas por método/tipo consideram só doações confirmadas.'
+      parameters:
+        - $ref: '#/components/parameters/De'
+        - $ref: '#/components/parameters/Ate'
+      responses:
+        '200': { description: Resumo financeiro }
+  /api/v1/donations/monthly:
+    get:
+      tags: [Doações]
+      summary: Série mensal (view vw_doacoes_por_mes)
+      description: 'Permissão: donations:read.'
+      parameters:
+        - { name: meses, in: query, schema: { type: integer, minimum: 1, maximum: 36, default: 12 } }
+      responses:
+        '200': { description: 'Lista de { mes: AAAA-MM, total, quantidade }' }
+  /api/v1/donations/export:
+    get:
+      tags: [Doações]
+      summary: Exportar doações em CSV
+      description: 'Permissão: donations:export. Mesmos filtros da listagem. Auditado.'
+      responses:
+        '200': { $ref: '#/components/responses/Csv' }
+  /api/v1/donations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Doações]
+      summary: Detalhe da doação
+      description: 'Permissão: donations:read.'
+      responses:
+        '200':
+          description: Doação
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Doações]
+      summary: Editar ou mudar status (confirmar, cancelar)
+      description: 'Permissão: donations:update. Doações canceladas não podem ser alteradas. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DonationInput' }
+      responses:
+        '200':
+          description: Doação atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DonationEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /api/v1/volunteers:
+    get:
+      tags: [Voluntários]
+      summary: Listar voluntários com áreas
+      description: 'Permissão: volunteers:read.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - { name: status, in: query, schema: { type: string, enum: [ativo, inativo] } }
+        - { name: area, in: query, schema: { $ref: '#/components/schemas/VolunteerArea' } }
+        - { name: sort, in: query, schema: { type: string, enum: [nome, criado_em, data_inicio, status] } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista paginada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VolunteerList' }
+    post:
+      tags: [Voluntários]
+      summary: Cadastrar voluntário
+      description: 'Permissão: volunteers:create. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VolunteerInput' }
+      responses:
+        '201':
+          description: Voluntário criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VolunteerEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/volunteers/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Voluntários]
+      summary: Detalhe do voluntário
+      description: 'Permissão: volunteers:read.'
+      responses:
+        '200':
+          description: Voluntário
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VolunteerEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Voluntários]
+      summary: Editar, aprovar (status ativo) ou trocar áreas
+      description: 'Permissão: volunteers:update. "areas" substitui o conjunto inteiro. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VolunteerInput' }
+      responses:
+        '200':
+          description: Voluntário atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VolunteerEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Voluntários]
+      summary: Excluir voluntário
+      description: 'Permissão: volunteers:delete. Auditado.'
+      responses:
+        '204': { description: Excluído }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/stories:
+    get:
+      tags: [Histórias]
+      summary: Listar histórias (painel)
+      description: 'Permissão: stories:read.'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - { name: publicado, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: animal_id, in: query, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200': { description: Lista paginada }
+    post:
+      tags: [Histórias]
+      summary: Criar história
+      description: 'Permissão: stories:create. Nasce despublicada, salvo publicado=true. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoryInput' }
+      responses:
+        '201': { description: História criada }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/stories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Histórias]
+      summary: Detalhe da história
+      description: 'Permissão: stories:read.'
+      responses:
+        '200': { description: História }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Histórias]
+      summary: Editar, publicar ou despublicar
+      description: 'Permissão: stories:update. Auditado.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoryInput' }
+      responses:
+        '200': { description: História atualizada }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Histórias]
+      summary: Excluir história
+      description: 'Permissão: stories:delete. Auditado.'
+      responses:
+        '204': { description: Excluída }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/public/animals:
+    get:
+      tags: [Público]
+      summary: Animais disponíveis para adoção
+      description: Somente status disponivel e urgente; sem login.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/AnimalSpecies'
+        - $ref: '#/components/parameters/AnimalSex'
+        - $ref: '#/components/parameters/AnimalSize'
+        - { name: castrado, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: vacinado, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: idadeMin, in: query, schema: { type: number } }
+        - { name: idadeMax, in: query, schema: { type: number } }
+      responses:
+        '200': { description: Lista paginada de animais públicos }
+  /api/v1/public/animals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Público]
+      summary: Ficha pública do animal
+      security: []
+      responses:
+        '200': { description: Animal disponível ou urgente }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/public/stories:
+    get:
+      tags: [Público]
+      summary: Histórias publicadas (sem dados do adotante)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200': { description: Lista paginada }
+  /api/v1/public/adoption-steps:
+    get:
+      tags: [Público]
+      summary: Etapas do processo de adoção (tabela adoption_steps)
+      security: []
+      responses:
+        '200': { description: 'Lista de { ordem, titulo, descricao }' }
+  /api/v1/public/stats:
+    get:
+      tags: [Público]
+      summary: Números da home (contagens agregadas)
+      security: []
+      responses:
+        '200': { description: '{ animais_resgatados, adocoes_realizadas, aguardando_lar }' }
+  /api/v1/public/adoption-requests:
+    post:
+      tags: [Público]
+      summary: Enviar pedido de adoção
+      description: |
+        Cria ou reaproveita o adotante pelo e-mail (sem sobrescrever cadastro existente) e registra o pedido com
+        protocolo PAC-XXXXXXXX. Animal precisa estar disponível ou urgente. Campo "website" é armadilha para robôs.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublicAdoptionRequest' }
+      responses:
+        '201': { description: 'Pedido recebido: { protocolo, status, data_pedido, animal }' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/public/volunteers:
+    post:
+      tags: [Público]
+      summary: Inscrição de voluntário
+      description: |
+        Entra como inativo (aguardando triagem). E-mail já cadastrado devolve o mesmo protocolo VOL-XXXXXXXX
+        sem alterar nem revelar o cadastro.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VolunteerApplication' }
+      responses:
+        '201': { description: 'Inscrição recebida: { protocolo, status }' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: patas_refresh
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Q:
+      name: q
+      in: query
+      description: Busca textual (até 120 caracteres)
+      schema: { type: string, maxLength: 120 }
+    Order:
+      name: order
+      in: query
+      schema: { type: string, enum: [asc, desc] }
+    De:
+      name: de
+      in: query
+      schema: { type: string, format: date }
+    Ate:
+      name: ate
+      in: query
+      schema: { type: string, format: date }
+    AnimalSpecies:
+      name: especie
+      in: query
+      schema: { type: string, enum: [cachorro, gato, outro] }
+    AnimalSex:
+      name: sexo
+      in: query
+      schema: { type: string, enum: [macho, femea] }
+    AnimalSize:
+      name: porte
+      in: query
+      schema: { type: string, enum: [pequeno, medio, grande] }
+    XRequestedWith:
+      name: X-Requested-With
+      in: header
+      required: true
+      description: Proteção contra CSRF nas rotas que usam o cookie de sessão.
+      schema: { type: string, enum: [XMLHttpRequest] }
+
+  responses:
+    Unauthorized:
+      description: Sessão ausente, expirada ou inválida (NAO_AUTENTICADO, TOKEN_INVALIDO, SESSAO_INVALIDA, SESSAO_EXPIRADA, CREDENCIAIS_INVALIDAS)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Sem permissão para a ação (SEM_PERMISSAO, TRANSICAO_NAO_PERMITIDA, CSRF_INVALIDO)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Registro não encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: 'Conflito com o estado atual (ex.: PEDIDO_ENCERRADO, TRANSICAO_INVALIDA, EMAIL_EM_USO)'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Dados inválidos (VALIDACAO_INVALIDA e afins), com detalhes por campo
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TooManyRequests:
+      description: Limite de requisições atingido (MUITAS_REQUISICOES, LOGIN_BLOQUEADO); veja Retry-After
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Csv:
+      description: Arquivo CSV (separador ";", UTF-8 com BOM, fórmulas neutralizadas)
+      content:
+        text/csv:
+          schema: { type: string }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDACAO_INVALIDA }
+            message: { type: string, example: Verifique os campos informados. }
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+    ListMeta:
+      type: object
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    Role:
+      type: string
+      enum: [administrador, gestor_animais, financeiro, voluntariado]
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        email: { type: string, format: email }
+        cargo: { $ref: '#/components/schemas/Role' }
+        ativo: { type: boolean }
+        criado_em: { type: string, format: date-time }
+        permissions: { type: array, items: { type: string, example: 'animals:read' } }
+    UserEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/User' }
+        meta: { type: object }
+    UserList:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/User' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+    SessionEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            token: { type: string }
+            user: { $ref: '#/components/schemas/User' }
+        meta: { type: object }
+    PermissionMatrix:
+      type: object
+      properties:
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              module: { type: string }
+              actions: { type: array, items: { type: string } }
+        roles:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { $ref: '#/components/schemas/Role' }
+              permissions: { type: object, additionalProperties: { type: array, items: { type: string } } }
+    AnimalStatus:
+      type: string
+      enum: [disponivel, em_processo, adotado, urgente, inativo]
+    Animal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        especie: { type: string, enum: [cachorro, gato, outro] }
+        raca: { type: string, nullable: true }
+        sexo: { type: string, enum: [macho, femea], nullable: true }
+        idade_anos: { type: string, nullable: true, description: 'numeric(4,1) devolvido como texto, ex.: "2.0"' }
+        porte: { type: string, enum: [pequeno, medio, grande], nullable: true }
+        status: { $ref: '#/components/schemas/AnimalStatus' }
+        descricao: { type: string, nullable: true }
+        foto_url: { type: string, nullable: true }
+        data_entrada: { type: string, format: date }
+        castrado: { type: boolean }
+        vacinado: { type: boolean }
+        criado_em: { type: string, format: date-time }
+        atualizado_em: { type: string, format: date-time }
+    AnimalInput:
+      type: object
+      properties:
+        nome: { type: string, maxLength: 100 }
+        especie: { type: string, enum: [cachorro, gato, outro] }
+        raca: { type: string, maxLength: 100, nullable: true }
+        sexo: { type: string, enum: [macho, femea], nullable: true }
+        idade_anos: { type: number, minimum: 0, maximum: 999.9, nullable: true }
+        porte: { type: string, enum: [pequeno, medio, grande], nullable: true }
+        status: { $ref: '#/components/schemas/AnimalStatus' }
+        descricao: { type: string, maxLength: 10000, nullable: true }
+        foto_url: { type: string, maxLength: 2048, nullable: true }
+        data_entrada: { type: string, format: date }
+        castrado: { type: boolean }
+        vacinado: { type: boolean }
+    AnimalEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Animal' }
+        meta: { type: object }
+    AnimalList:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Animal' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+    AdoptionStatus:
+      type: string
+      enum: [novo, em_analise, visita_agendada, aprovado, reprovado]
+    Priority:
+      type: string
+      enum: [alto, medio, baixo]
+    AdoptionRequestSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/AdoptionStatus' }
+        prioridade: { $ref: '#/components/schemas/Priority' }
+        termo_assinado: { type: boolean }
+        termo_assinado_em: { type: string, format: date-time, nullable: true }
+        data_pedido: { type: string, format: date-time }
+        atualizado_em: { type: string, format: date-time }
+        animal:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            nome: { type: string }
+            especie: { type: string }
+            status: { $ref: '#/components/schemas/AnimalStatus' }
+            foto_url: { type: string, nullable: true }
+        adotante:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            nome: { type: string }
+            cidade: { type: string, nullable: true }
+            estado: { type: string, nullable: true }
+            status: { type: string }
+            email: { type: string, example: 'an***@example.org' }
+            telefone: { type: string, nullable: true, example: '*******7777' }
+        responsavel:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            nome: { type: string }
+    AdoptionRequestEnvelope:
+      type: object
+      properties:
+        data:
+          allOf:
+            - $ref: '#/components/schemas/AdoptionRequestSummary'
+            - type: object
+              properties:
+                observacoes: { type: string, nullable: true, description: Histórico de anotações com contatos mascarados }
+        meta: { type: object }
+    AdoptionRequestList:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AdoptionRequestSummary' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+    Decision:
+      type: object
+      required: [justificativa]
+      properties:
+        justificativa: { type: string, minLength: 10, maxLength: 2000 }
+    Schedule:
+      type: object
+      required: [tipo, data_hora]
+      properties:
+        tipo: { type: string, enum: [visita, entrevista] }
+        data_hora: { type: string, example: '2026-10-10T14:00', description: 'Data e horário de Brasília (AAAA-MM-DDTHH:mm), no futuro' }
+        local: { type: string, maxLength: 300, description: Endereço ou link da chamada }
+        mensagem: { type: string, maxLength: 1000, description: Mensagem da equipe incluída no e-mail }
+        enviar_email: { type: boolean, default: false }
+    ScheduleResultEnvelope:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            pedido:
+              allOf:
+                - $ref: '#/components/schemas/AdoptionRequestSummary'
+                - type: object
+                  properties:
+                    observacoes: { type: string, nullable: true }
+            email:
+              type: object
+              nullable: true
+              description: null quando enviar_email não foi pedido
+              properties:
+                enviado: { type: boolean }
+                para: { type: string, description: E-mail do adotante mascarado (quando enviado) }
+                motivo: { type: string, description: Por que não foi enviado }
+        meta: { type: object }
+    Confirmation:
+      type: object
+      required: [confirmacao]
+      properties:
+        confirmacao: { type: string, enum: [ANONIMIZAR, EXCLUIR] }
+    Adopter:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        email: { type: string, example: 'an***@example.org' }
+        telefone: { type: string, nullable: true, example: '*******7777' }
+        cidade: { type: string, nullable: true }
+        estado: { type: string, nullable: true }
+        status: { type: string, enum: [em_analise, visita_agendada, adotante, inativo] }
+        possui_endereco: { type: boolean }
+        total_pedidos: { type: integer }
+        pedidos_abertos: { type: integer }
+        criado_em: { type: string, format: date-time }
+    AdopterList:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Adopter' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+    Donation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        adotante_id: { type: string, format: uuid, nullable: true }
+        adotante_nome: { type: string, nullable: true }
+        doador_nome: { type: string }
+        doador_email: { type: string, nullable: true }
+        tipo: { type: string, enum: [unica, recorrente] }
+        valor: { type: number, example: 42.5 }
+        metodo: { type: string, enum: [pix, cartao, boleto, transferencia], nullable: true }
+        status: { type: string, enum: [pendente, confirmada, cancelada] }
+        data: { type: string, format: date-time }
+    DonationInput:
+      type: object
+      properties:
+        doador_nome: { type: string, maxLength: 150 }
+        doador_email: { type: string, format: email, nullable: true }
+        tipo: { type: string, enum: [unica, recorrente] }
+        valor: { type: number, exclusiveMinimum: true, minimum: 0, description: Até duas casas decimais }
+        metodo: { type: string, enum: [pix, cartao, boleto, transferencia], nullable: true }
+        status: { type: string, enum: [pendente, confirmada, cancelada] }
+        data: { type: string, format: date-time, description: Não pode estar no futuro }
+        adotante_id: { type: string, format: uuid, nullable: true }
+    DonationEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Donation' }
+        meta: { type: object }
+    DonationList:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Donation' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+    VolunteerArea:
+      type: string
+      enum: [passeios, banho_e_tosa, divulgacao, eventos, transporte, fotografia, socializacao, captacao, manutencao]
+    Volunteer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        email: { type: string, format: email }
+        telefone: { type: string, nullable: true }
+        status: { type: string, enum: [ativo, inativo] }
+        data_inicio: { type: string, format: date }
+        criado_em: { type: string, format: date-time }
+        areas: { type: array, items: { $ref: '#/components/schemas/VolunteerArea' } }
+    VolunteerInput:
+      type: object
+      properties:
+        nome: { type: string, maxLength: 150 }
+        email: { type: string, format: email }
+        telefone: { type: string, nullable: true }
+        status: { type: string, enum: [ativo, inativo] }
+        data_inicio: { type: string, format: date, nullable: true }
+        areas: { type: array, items: { $ref: '#/components/schemas/VolunteerArea' } }
+    VolunteerEnvelope:
+      type: object
+      properties:
+        data: { $ref: '#/components/schemas/Volunteer' }
+        meta: { type: object }
+    VolunteerList:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/Volunteer' } }
+        meta: { $ref: '#/components/schemas/ListMeta' }
+    VolunteerApplication:
+      type: object
+      required: [nome, email, telefone, areas]
+      properties:
+        nome: { type: string }
+        email: { type: string, format: email }
+        telefone: { type: string, description: Com DDD }
+        areas: { type: array, minItems: 1, items: { $ref: '#/components/schemas/VolunteerArea' } }
+        website: { type: string, description: 'Armadilha para robôs: deve ficar vazio' }
+    StoryInput:
+      type: object
+      properties:
+        autor_nome: { type: string, maxLength: 150 }
+        texto: { type: string, minLength: 10, maxLength: 5000 }
+        foto_url: { type: string, nullable: true }
+        publicado: { type: boolean }
+        animal_id: { type: string, format: uuid, nullable: true }
+        adotante_id: { type: string, format: uuid, nullable: true }
+    PublicAdoptionRequest:
+      type: object
+      required: [animal_id, nome, email, telefone, cidade, rotina, ambiente_seguro, ciente_pos_adocao]
+      properties:
+        animal_id: { type: string, format: uuid }
+        nome: { type: string, maxLength: 150 }
+        email: { type: string, format: email }
+        telefone: { type: string, description: Com DDD }
+        cidade: { type: string, maxLength: 100 }
+        rotina: { type: string, minLength: 10, maxLength: 2000 }
+        ambiente_seguro: { type: boolean, enum: [true] }
+        ciente_pos_adocao: { type: boolean, enum: [true] }
+        website: { type: string, description: 'Armadilha para robôs: deve ficar vazio' }
+    DashboardSummary:
+      type: object
+      properties:
+        atualizado_em: { type: string, format: date-time }
+        indicadores:
+          type: object
+          properties:
+            total_animais: { type: integer }
+            animais_sob_cuidado: { type: integer }
+            adocoes_mes: { type: integer }
+            adocoes_ano: { type: integer }
+            total_adocoes: { type: integer }
+            arrecadado_mes: { type: number }
+            pedidos_pendentes: { type: integer }
+        animais: { type: object, description: 'por_status, saude (percentuais de vacinados, castrados e adotados), urgentes' }
+        pedidos: { type: object, description: 'por_status, recentes' }
+        doacoes: { type: object, description: 'por_metodo (confirmadas, 12 meses)' }
+        series_mensais:
+          type: array
+          items:
+            type: object
+            properties:
+              mes: { type: string, example: '2026-08' }
+              adocoes: { type: integer }
+              doacoes_total: { type: number }
+              doacoes_quantidade: { type: integer }
+        agenda:
+          type: array
+          items:
+            type: object
+            properties:
+              tipo: { type: string, enum: [visita, termo_pendente] }
+              pedido_id: { type: string, format: uuid }
+              referencia_em: { type: string, format: date-time }
+              animal_nome: { type: string }
+              adotante_nome: { type: string }
+              responsavel_nome: { type: string, nullable: true }
