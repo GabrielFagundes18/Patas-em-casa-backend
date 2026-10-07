@@ -63,17 +63,24 @@ server.js                  # inicia o HTTP e faz o encerramento ordenado (SIGTER
 src/
   app.js                   # middlewares globais e montagem das rotas /api/v1
   config/                  # env (validação), permissions (matriz única), domain-values (valores do banco)
-  db/                      # pool do PostgreSQL e helper de transação
-  middleware/              # auth, csrf, rate-limit, validate-request, security-headers, error-handler...
-  router/                  # router-<modulo>.js: rota → permissão → validador → controller
-  controller/              # controller-<modulo>.js: HTTP (req/res), sem SQL
-  services/<modulo>/       # regras de negócio, transações e auditoria, sem HTTP
-  repositories/<modulo>/   # todo o SQL, sempre parametrizado
-  validators/<modulo>/     # validação de entrada (devolve detalhes por campo)
-  utils/                   # respostas, erros, paginação, CSV, mascaramento, cookies, política de senha, logger
-migrations/                # 000 = schema atual; 001–008 = propostas (ainda não aplicadas) e rollbacks
-scripts/                   # definir-senha, gerar-doc-permissoes
-tests/                     # unitários/HTTP; tests/integration = banco real com ROLLBACK
+  db/                      # pool.js (conexão), connection-check.js (teste de conexão), sql.js, transaction.js
+  middleware/              # auth, csrf, rate-limit, validate-request, security-headers, upload, error-handler...
+  modules/<domínio>/       # um domínio por pasta, sempre no padrão <entidade>-<camada>.js:
+                           #   <entidade>-routes.js      rota → permissão → validador → controller
+                           #   <entidade>-controller.js  HTTP (req/res), sem SQL
+                           #   <entidade>-service.js     regras de negócio, transações e auditoria, sem HTTP
+                           #   <entidade>-repository.js  todo o SQL, sempre parametrizado
+                           #   <entidade>-validators.js  validação de entrada (devolve detalhes por campo)
+                           # domínios: adopters, adoptions, animals, audit, auth, content, dashboard,
+                           #   donations, health, permissions, public, stories, users, volunteers
+  integrations/            # serviços externos: email (SMTP e modelos), payments (Mercado Pago), storage (fotos em disco)
+  utils/                   # respostas, erros, paginação, CSV, mascaramento, cookies, política de senha, logger, validators
+migrations/                # SQL versionado + rollback/ e ordem.json (aplicar com npm run db:migrate)
+scripts/                   # definir-senha, gerar-doc-permissoes, migrar
+tests/
+  unit/                    # unitários e HTTP (npm test)
+  integration/             # banco real com ROLLBACK (npm run test:integration)
+  helpers/                 # repositórios e sessões falsos, transação de teste
 docs/                      # OpenAPI, permissões, plano de migrações
 ```
 
@@ -85,12 +92,12 @@ Erros viram `AppError` e o `error-handler` responde no formato padrão, sem deta
 
 ### Criar um módulo novo
 
-1. Copie o módulo de **histórias** como modelo: `repositories/stories`, `services/stories`, `validators/stories`,
-   `controller/controller-stories.js` e `router/router-stories.js`.
+1. Copie a pasta do módulo de **histórias** como modelo: `src/modules/stories/` (`story-routes.js`,
+   `story-controller.js`, `story-service.js`, `story-repository.js` e `story-validators.js`).
 2. Acrescente o módulo e as ações em `src/config/permissions.js` e rode `npm run docs:permissoes`.
 3. Monte a rota em `src/app.js` e documente cada operação em `docs/openapi.yaml`
    (o teste `openapi-coverage` falha se uma rota ficar sem documentação).
-4. Escreva testes unitários (serviço com repositório falso) e um fluxo em `tests/integration`.
+4. Escreva testes unitários em `tests/unit` (serviço com repositório falso) e um fluxo em `tests/integration`.
 
 ## Segurança e LGPD
 

@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 
-// Repositório de sessões em memória, com a mesma interface de src/repositories/auth/session-repository.js.
+// Repositório de sessões em memória, com a mesma interface de src/modules/auth/session-repository.js.
 function createFakeSessions() {
   const rows = new Map();
   return {

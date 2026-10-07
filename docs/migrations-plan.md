@@ -67,5 +67,5 @@ registra nome e checksum em `schema_migrations`. Arquivo já aplicado não pode 
   a 009 já recriou `usuarios_cargo_check` para o cargo `gestor_ong`).
   Enquanto isso, a API usa os cargos e status atuais; `financeiro` cumpre o papel de Atendimento e Doações.
 - **Pedido de adoção pelo site**: hoje não muda o status do animal (premissa). Se o animal deve ir para `em_processo`
-  ao receber o primeiro pedido, a regra entra em `src/services/adoptions/adoption-request-service.js`.
+  ao receber o primeiro pedido, a regra entra em `src/modules/adoptions/adoption-request-service.js`.
 - **Auditoria**: o código já grava em `auditoria_eventos` assim que a 001 for aplicada (detectado automaticamente).
