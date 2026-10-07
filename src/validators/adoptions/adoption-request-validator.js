@@ -1,4 +1,4 @@
-const { EMAIL_PATTERN, PHONE_PATTERN, UUID_PATTERN } = require('../common-validators');
+const { EMAIL_PATTERN, PHONE_PATTERN, UUID_PATTERN } = require('../../utils/validators');
 const { isValidBrasiliaDateTime } = require('../../utils/brasilia-time');
 
 const MAX_ROUTINE_LENGTH = 2000;

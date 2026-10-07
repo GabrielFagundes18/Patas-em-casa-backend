@@ -4,7 +4,7 @@ const asyncHandler = require('../middleware/async-handler');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const validateRequest = require('../middleware/validate-request');
 const { receivePhotos } = require('../middleware/upload');
-const { validateIdParam } = require('../validators/common-validators');
+const { validateIdParam } = require('../utils/validators');
 const {
   validateAnimalStatus,
   validateCreateAnimal,

@@ -4,11 +4,11 @@ const { readConfig } = require('../../config/env');
 const logger = require('../../utils/logger');
 const repositoryModule = require('../../repositories/donations/online-donation-repository');
 const auditService = require('../audit/audit-service');
-const defaultMailer = require('../email/mailer');
-const { buildCancelLinkEmail, buildSubscriptionActiveEmail } = require('../email/donation-emails');
-const { createMercadoPagoClient, verifyWebhookSignature } = require('../payments/mercado-pago-client');
+const defaultMailer = require('../../integrations/email/mailer');
+const { buildCancelLinkEmail, buildSubscriptionActiveEmail } = require('../../integrations/email/donation-emails');
+const { createMercadoPagoClient, verifyWebhookSignature } = require('../../integrations/payments/mercado-pago-client');
 const { parsePagination } = require('../../utils/pagination');
-const { UUID_PATTERN } = require('../../validators/common-validators');
+const { UUID_PATTERN } = require('../../utils/validators');
 
 const CANCEL_LINK_DAYS = 7;
 

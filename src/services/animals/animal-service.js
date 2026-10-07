@@ -4,7 +4,7 @@ const { MAX_EXPORT_ROWS, ensureExportLimit } = require('../../utils/csv');
 const animalRepository = require('../../repositories/animals/animal-repository');
 const animalMediaRepository = require('../../repositories/animals/animal-media-repository');
 const auditService = require('../audit/audit-service');
-const { createPhotoStorage, detectImage } = require('../storage/photo-storage');
+const { createPhotoStorage, detectImage } = require('../../integrations/storage/photo-storage');
 const { assertStatusTransition } = require('./animal-status-rules');
 
 const { animal: animalValues } = require('../../config/domain-values');

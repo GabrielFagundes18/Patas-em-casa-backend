@@ -1,6 +1,6 @@
 const { animal } = require('../../config/domain-values');
 const { parsePagination } = require('../../utils/pagination');
-const { UUID_PATTERN, enumDetail } = require('../common-validators');
+const { UUID_PATTERN, enumDetail } = require('../../utils/validators');
 const UPDATE_FIELDS = [
   'nome',
   'especie',

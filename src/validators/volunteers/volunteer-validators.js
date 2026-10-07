@@ -6,7 +6,7 @@ const {
   isValidDate,
   listQueryDetails,
   textDetail,
-} = require('../common-validators');
+} = require('../../utils/validators');
 
 const SORT_FIELDS = ['nome', 'criado_em', 'data_inicio', 'status'];
 

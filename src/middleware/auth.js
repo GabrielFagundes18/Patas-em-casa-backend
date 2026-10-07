@@ -4,7 +4,7 @@ const { getPermissionsForRole, hasPermission } = require('../config/permissions'
 const { readConfig } = require('../config/env');
 const userRepository = require('../repositories/auth/user-repository');
 const sessionRepository = require('../repositories/auth/session-repository');
-const { UUID_PATTERN } = require('../validators/common-validators');
+const { UUID_PATTERN } = require('../utils/validators');
 
 const { jwtSecret } = readConfig();
 

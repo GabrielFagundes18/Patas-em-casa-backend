@@ -1,4 +1,4 @@
-const { UUID_PATTERN, listQueryDetails, textDetail } = require('../common-validators');
+const { UUID_PATTERN, listQueryDetails, textDetail } = require('../../utils/validators');
 
 function urlDetail(body) {
   if (!Object.hasOwn(body, 'foto_url') || body.foto_url === null || body.foto_url === '') return null;

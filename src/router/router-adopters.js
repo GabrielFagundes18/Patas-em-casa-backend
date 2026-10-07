@@ -3,7 +3,7 @@ const ControllerAdopters = require('../controller/controller-adopters');
 const asyncHandler = require('../middleware/async-handler');
 const { requireAuth, requirePermission } = require('../middleware/auth');
 const validateRequest = require('../middleware/validate-request');
-const { validateIdParam } = require('../validators/common-validators');
+const { validateIdParam } = require('../utils/validators');
 const {
   validateConfirmation,
   validateListAdopters,

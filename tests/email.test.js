@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { readConfig } = require('../src/config/env');
-const { createMailer } = require('../src/services/email/mailer');
+const { createMailer } = require('../src/integrations/email/mailer');
 const { validateSchedule } = require('../src/validators/adoptions/adoption-triage-validators');
 
 test('SMTP is optional and derives TLS and sender from the other variables', () => {

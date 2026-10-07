@@ -5,7 +5,7 @@ const {
   enumDetail,
   listQueryDetails,
   textDetail,
-} = require('../common-validators');
+} = require('../../utils/validators');
 
 const SORT_FIELDS = ['nome', 'criado_em', 'cidade', 'status'];
 const STATE_PATTERN = /^[A-Z]{2}$/;

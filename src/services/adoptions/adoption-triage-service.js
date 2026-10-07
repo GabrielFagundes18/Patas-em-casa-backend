@@ -9,13 +9,13 @@ const withTransaction = require('../../db/transaction');
 const triageRepository = require('../../repositories/adoptions/adoption-triage-repository');
 const appointmentRepository = require('../../repositories/adoptions/appointment-repository');
 const auditService = require('../audit/audit-service');
-const defaultMailer = require('../email/mailer');
+const defaultMailer = require('../../integrations/email/mailer');
 const {
   buildAppointmentCancelledEmail,
   buildAppointmentEmail,
   buildAppointmentRescheduledEmail,
   buildDecisionEmail,
-} = require('../email/adoption-emails');
+} = require('../../integrations/email/adoption-emails');
 
 const OPEN_STATUSES = adoptionRequest.openStatus;
 const APPOINTMENT_LABELS = { visita: 'Visita', entrevista: 'Entrevista' };

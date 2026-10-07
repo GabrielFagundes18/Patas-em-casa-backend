@@ -1,6 +1,6 @@
 const logger = require('../../utils/logger');
 const auditRepository = require('../../repositories/audit/audit-repository');
-const { UUID_PATTERN } = require('../../validators/common-validators');
+const { UUID_PATTERN } = require('../../utils/validators');
 
 // Extrai de req o contexto do autor da ação (usuário, cargo, IP e navegador).
 function auditContext(req) {

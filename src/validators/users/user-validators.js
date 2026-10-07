@@ -4,7 +4,7 @@ const {
   enumDetail,
   listQueryDetails,
   textDetail,
-} = require('../common-validators');
+} = require('../../utils/validators');
 
 const SORT_FIELDS = ['nome', 'email', 'cargo', 'criado_em'];
 

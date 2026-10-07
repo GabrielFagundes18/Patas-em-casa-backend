@@ -6,7 +6,7 @@ const {
   isValidDate,
   listQueryDetails,
   textDetail,
-} = require('../common-validators');
+} = require('../../utils/validators');
 
 const SORT_FIELDS = ['data', 'valor', 'doador_nome', 'status'];
 const MAX_VALUE = 99999999.99;

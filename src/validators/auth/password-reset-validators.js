@@ -1,4 +1,4 @@
-const { EMAIL_PATTERN } = require('../common-validators');
+const { EMAIL_PATTERN } = require('../../utils/validators');
 
 function validateForgotPassword({ body }) {
   return typeof body.email === 'string' && EMAIL_PATTERN.test(body.email.trim()) && body.email.trim().length <= 150
