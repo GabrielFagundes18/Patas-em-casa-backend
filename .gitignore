@@ -1,5 +1,26 @@
+# Dependências
 node_modules/
+
+# Variáveis de ambiente: só o exemplo vai para o Git
 .env
 .env.*
 !.env.example
+
+# Fotos enviadas pelo painel (UPLOAD_DIR)
 uploads/
+
+# Testes e logs
+coverage/
+logs/
+*.log
+
+# Sistema operacional e IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Backups e temporários
+*.bak
+*.tmp
+*.old
