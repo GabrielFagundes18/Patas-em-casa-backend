@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { planMigrations, readOrder } = require('../scripts/migrar');
+const { planMigrations, readOrder } = require('../../scripts/migrar');
 
 test('the migration order lists existing files, starting with the base schema', () => {
   const migrations = readOrder();

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test": "node --test tests/*.test.js",
+    "test": "node --test tests/unit/*.test.js",
     "build": "echo \"Backend Node.js não exige build.\"",
     "definir-senha": "node scripts/definir-senha.js",
     "test:integration": "node --test --test-concurrency=1 tests/integration/*.test.js",

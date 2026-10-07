@@ -1,15 +1,15 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const jwt = require('jsonwebtoken');
-const { toCsv } = require('../src/utils/csv');
-const { maskContactsInText, maskEmail, maskPhone } = require('../src/utils/masking');
-const { parseCookies, serializeCookie } = require('../src/utils/cookies');
-const { getPasswordProblems } = require('../src/utils/password-policy');
-const rateLimit = require('../src/middleware/rate-limit');
-const { createLoginThrottle } = require('../src/modules/auth/login-throttle');
-const { createAuthService } = require('../src/modules/auth/auth-service');
-const { readConfig } = require('../src/config/env');
-const { createFakeSessions } = require('./helpers/fake-sessions');
+const { toCsv } = require('../../src/utils/csv');
+const { maskContactsInText, maskEmail, maskPhone } = require('../../src/utils/masking');
+const { parseCookies, serializeCookie } = require('../../src/utils/cookies');
+const { getPasswordProblems } = require('../../src/utils/password-policy');
+const rateLimit = require('../../src/middleware/rate-limit');
+const { createLoginThrottle } = require('../../src/modules/auth/login-throttle');
+const { createAuthService } = require('../../src/modules/auth/auth-service');
+const { readConfig } = require('../../src/config/env');
+const { createFakeSessions } = require('../helpers/fake-sessions');
 
 const user = { id: '11111111-1111-4111-8111-111111111111', nome: 'Carla', email: 'carla@example.org', senha_hash: 'hash', cargo: 'administrador', ativo: true };
 

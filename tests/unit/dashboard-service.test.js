@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createDashboardService } = require('../src/modules/dashboard/dashboard-service');
+const { createDashboardService } = require('../../src/modules/dashboard/dashboard-service');
 
 function setup() {
   let calls = 0;

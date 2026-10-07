@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const app = require('../src/app');
+const app = require('../../src/app');
 
 // Lê as rotas reais registradas no Express (inclusive as de routers montados em subcaminhos).
 function listRoutes() {
@@ -34,7 +34,7 @@ function listRoutes() {
 
 // Lê pares "MÉTODO caminho" do docs/openapi.yaml sem depender de biblioteca YAML.
 function listDocumented() {
-  const lines = fs.readFileSync(path.join(__dirname, '..', 'docs', 'openapi.yaml'), 'utf8').split('\n');
+  const lines = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'openapi.yaml'), 'utf8').split('\n');
   const documented = [];
   let currentPath = null;
   let inPaths = false;

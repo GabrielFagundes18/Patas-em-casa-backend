@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const bcrypt = require('bcryptjs');
-const { setUserPassword, validatePassword } = require('../scripts/definir-senha');
+const { setUserPassword, validatePassword } = require('../../scripts/definir-senha');
 
 test('password script stores a bcrypt hash for the normalized e-mail', async () => {
   let receivedQuery;

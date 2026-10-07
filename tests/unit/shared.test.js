@@ -1,13 +1,13 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const AppError = require('../src/utils/app-error');
-const { errorResponse, listResponse, successResponse } = require('../src/utils/http-response');
-const { MAX_PAGE_SIZE, parsePagination } = require('../src/utils/pagination');
-const validateRequest = require('../src/middleware/validate-request');
-const { readConfig } = require('../src/config/env');
-const { getPermissionsForRole, hasPermission } = require('../src/config/permissions');
+const AppError = require('../../src/utils/app-error');
+const { errorResponse, listResponse, successResponse } = require('../../src/utils/http-response');
+const { MAX_PAGE_SIZE, parsePagination } = require('../../src/utils/pagination');
+const validateRequest = require('../../src/middleware/validate-request');
+const { readConfig } = require('../../src/config/env');
+const { getPermissionsForRole, hasPermission } = require('../../src/config/permissions');
 const jwt = require('jsonwebtoken');
-const { requireAuth, requirePermission, signToken } = require('../src/middleware/auth');
+const { requireAuth, requirePermission, signToken } = require('../../src/middleware/auth');
 
 test('success responses use the common data and meta envelope', () => {
   assert.deepEqual(successResponse({ id: 'a1' }), { data: { id: 'a1' }, meta: {} });
@@ -111,6 +111,6 @@ test('authentication and permission middleware return application errors', () =>
 });
 test('docs/permissoes.md reflects the permission matrix in the code', () => {
   const fs = require('node:fs');
-  const { buildDocument, target } = require('../scripts/gerar-doc-permissoes');
+  const { buildDocument, target } = require('../../scripts/gerar-doc-permissoes');
   assert.equal(fs.readFileSync(target, 'utf8'), buildDocument(), 'Rode "npm run docs:permissoes" após mudar a matriz.');
 });

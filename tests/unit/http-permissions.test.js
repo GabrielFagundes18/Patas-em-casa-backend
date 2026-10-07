@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const app = require('../src/app');
-const { tokenFor, useFakeUsers } = require('./helpers/fake-users');
+const app = require('../../src/app');
+const { tokenFor, useFakeUsers } = require('../helpers/fake-users');
 
 const SOME_ID = '550e8400-e29b-41d4-a716-446655440000';
 let restoreUsers;

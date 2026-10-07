@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const app = require('../src/app');
-const { tokenFor, useFakeUsers } = require('./helpers/fake-users');
+const app = require('../../src/app');
+const { tokenFor, useFakeUsers } = require('../helpers/fake-users');
 
 let restoreUsers;
 test.before(() => {
@@ -160,7 +160,7 @@ test('legacy and mock routes were removed in favour of /api/v1', async (context)
 });
 
 test('animal status endpoint only forwards the status field', async (context) => {
-  const animalService = require('../src/modules/animals/animal-service');
+  const animalService = require('../../src/modules/animals/animal-service');
   const originalChangeStatus = animalService.changeStatus;
   let receivedChanges;
   animalService.changeStatus = async (id, changes) => {
@@ -204,7 +204,7 @@ test('public adoption request validates the form before touching the database', 
 });
 
 test('authorization uses the current role and status from the database, not the token claims', async (context) => {
-  const animalService = require('../src/modules/animals/animal-service');
+  const animalService = require('../../src/modules/animals/animal-service');
   const originalList = animalService.list;
   animalService.list = async () => ({ items: [], total: 0 });
   const server = app.listen(0);

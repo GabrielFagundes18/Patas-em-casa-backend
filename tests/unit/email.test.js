@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { readConfig } = require('../src/config/env');
-const { createMailer } = require('../src/integrations/email/mailer');
-const { validateSchedule } = require('../src/modules/adoptions/adoption-triage-validators');
+const { readConfig } = require('../../src/config/env');
+const { createMailer } = require('../../src/integrations/email/mailer');
+const { validateSchedule } = require('../../src/modules/adoptions/adoption-triage-validators');
 
 test('SMTP is optional and derives TLS and sender from the other variables', () => {
   assert.equal(readConfig({}).email, null);

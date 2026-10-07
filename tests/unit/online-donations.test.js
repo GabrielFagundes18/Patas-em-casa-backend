@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 const { createHmac } = require('node:crypto');
 const test = require('node:test');
-const { verifyWebhookSignature } = require('../src/integrations/payments/mercado-pago-client');
-const { createOnlineDonationService, paymentMethod } = require('../src/modules/donations/online-donation-service');
+const { verifyWebhookSignature } = require('../../src/integrations/payments/mercado-pago-client');
+const { createOnlineDonationService, paymentMethod } = require('../../src/modules/donations/online-donation-service');
 
 const SECRET = 'segredo-do-webhook';
 const config = {

@@ -1,9 +1,9 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createAuthService } = require('../src/modules/auth/auth-service');
-const { createAccessLinkService, hashToken } = require('../src/modules/auth/access-link-service');
-const { createLoginThrottle } = require('../src/modules/auth/login-throttle');
-const { createFakeSessions } = require('./helpers/fake-sessions');
+const { createAuthService } = require('../../src/modules/auth/auth-service');
+const { createAccessLinkService, hashToken } = require('../../src/modules/auth/access-link-service');
+const { createLoginThrottle } = require('../../src/modules/auth/login-throttle');
+const { createFakeSessions } = require('../helpers/fake-sessions');
 
 const user = {
   id: '550e8400-e29b-41d4-a716-446655440000',
