@@ -1,14 +1,14 @@
 const express = require('express');
-const ControllerVolunteers = require('../controller/controller-volunteers');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth, requirePermission } = require('../middleware/auth');
-const validateRequest = require('../middleware/validate-request');
-const { validateIdParam } = require('../utils/validators');
+const ControllerVolunteers = require('./volunteer-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth, requirePermission } = require('../../middleware/auth');
+const validateRequest = require('../../middleware/validate-request');
+const { validateIdParam } = require('../../utils/validators');
 const {
   validateCreateVolunteer,
   validateListVolunteers,
   validateUpdateVolunteer,
-} = require('../validators/volunteers/volunteer-validators');
+} = require('./volunteer-validators');
 
 const router = express.Router();
 

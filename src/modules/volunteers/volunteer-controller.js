@@ -1,7 +1,7 @@
-const volunteerService = require('../services/volunteers/volunteer-service');
-const { auditContext } = require('../modules/audit/audit-service');
-const { listResponse, successResponse } = require('../utils/http-response');
-const { parsePagination } = require('../utils/pagination');
+const volunteerService = require('./volunteer-service');
+const { auditContext } = require('../audit/audit-service');
+const { listResponse, successResponse } = require('../../utils/http-response');
+const { parsePagination } = require('../../utils/pagination');
 
 exports.list = async (req, res) => {
   const { items, total } = await volunteerService.list(req.query);

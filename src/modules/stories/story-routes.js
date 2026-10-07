@@ -1,14 +1,14 @@
 const express = require('express');
-const ControllerStories = require('../controller/controller-stories');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth, requirePermission } = require('../middleware/auth');
-const validateRequest = require('../middleware/validate-request');
-const { validateIdParam } = require('../utils/validators');
+const ControllerStories = require('./story-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth, requirePermission } = require('../../middleware/auth');
+const validateRequest = require('../../middleware/validate-request');
+const { validateIdParam } = require('../../utils/validators');
 const {
   validateCreateStory,
   validateListStories,
   validateUpdateStory,
-} = require('../validators/stories/story-validators');
+} = require('./story-validators');
 
 const router = express.Router();
 

@@ -1,11 +1,11 @@
-const animalService = require('../modules/animals/animal-service');
-const adoptionRequestService = require('../modules/adoptions/adoption-request-service');
-const adoptionStepService = require('../modules/content/adoption-step-service');
-const dashboardService = require('../modules/dashboard/dashboard-service');
-const storyService = require('../services/stories/story-service');
-const volunteerService = require('../services/volunteers/volunteer-service');
-const { listResponse, successResponse } = require('../utils/http-response');
-const { parsePagination } = require('../utils/pagination');
+const animalService = require('../animals/animal-service');
+const adoptionRequestService = require('../adoptions/adoption-request-service');
+const adoptionStepService = require('../content/adoption-step-service');
+const dashboardService = require('../dashboard/dashboard-service');
+const storyService = require('../stories/story-service');
+const volunteerService = require('../volunteers/volunteer-service');
+const { listResponse, successResponse } = require('../../utils/http-response');
+const { parsePagination } = require('../../utils/pagination');
 
 exports.listAnimals = async (req, res) => {
   const { items, total } = await animalService.listPublicPage(req.query);
