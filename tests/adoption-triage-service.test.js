@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createAdoptionTriageService } = require('../src/services/adoptions/adoption-triage-service');
+const { createAdoptionTriageService } = require('../src/modules/adoptions/adoption-triage-service');
 
 const OPEN = ['novo', 'em_analise', 'visita_agendada'];
 const actor = { userId: '11111111-1111-4111-8111-111111111111', role: 'gestor_animais', name: 'Carla' };

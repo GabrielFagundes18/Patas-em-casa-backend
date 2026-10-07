@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { createAnimalService } = require('../src/services/animals/animal-service');
+const { createAnimalService } = require('../src/modules/animals/animal-service');
 const { createPhotoStorage, detectImage } = require('../src/integrations/storage/photo-storage');
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cf000000030101005f4f8d3f0000000049454e44ae426082', 'hex');

@@ -1,14 +1,14 @@
 const express = require('express');
-const ControllerAdopters = require('../controller/controller-adopters');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth, requirePermission } = require('../middleware/auth');
-const validateRequest = require('../middleware/validate-request');
-const { validateIdParam } = require('../utils/validators');
+const ControllerAdopters = require('./adopter-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth, requirePermission } = require('../../middleware/auth');
+const validateRequest = require('../../middleware/validate-request');
+const { validateIdParam } = require('../../utils/validators');
 const {
   validateConfirmation,
   validateListAdopters,
   validateUpdateAdopter,
-} = require('../validators/adopters/adopter-validators');
+} = require('./adopter-validators');
 
 const router = express.Router();
 

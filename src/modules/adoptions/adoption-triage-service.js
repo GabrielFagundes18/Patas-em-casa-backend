@@ -6,9 +6,9 @@ const logger = require('../../utils/logger');
 const { maskContactsInText, maskEmail, maskPhone } = require('../../utils/masking');
 const { parsePagination } = require('../../utils/pagination');
 const withTransaction = require('../../db/transaction');
-const triageRepository = require('../../repositories/adoptions/adoption-triage-repository');
-const appointmentRepository = require('../../repositories/adoptions/appointment-repository');
-const auditService = require('../audit/audit-service');
+const triageRepository = require('./adoption-triage-repository');
+const appointmentRepository = require('./appointment-repository');
+const auditService = require('../../services/audit/audit-service');
 const defaultMailer = require('../../integrations/email/mailer');
 const {
   buildAppointmentCancelledEmail,

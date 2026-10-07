@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const AppError = require('../src/utils/app-error');
-const { createAnimalService: createService } = require('../src/services/animals/animal-service');
+const { createAnimalService: createService } = require('../src/modules/animals/animal-service');
 
 const noAudit = { record: async () => {} };
 const createAnimalService = (repository, options = {}) => createService(repository, { audit: noAudit, ...options });

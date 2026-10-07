@@ -4,8 +4,8 @@ const asyncHandler = require('../middleware/async-handler');
 const rateLimit = require('../middleware/rate-limit');
 const validateRequest = require('../middleware/validate-request');
 const { validateIdParam, listQueryDetails } = require('../utils/validators');
-const { validateListAnimals } = require('../validators/animals/animal-validators');
-const validateAdoptionRequest = require('../validators/adoptions/adoption-request-validator');
+const { validateListAnimals } = require('../modules/animals/animal-validators');
+const validateAdoptionRequest = require('../modules/adoptions/adoption-request-validator');
 const { validateVolunteerApplication } = require('../validators/volunteers/volunteer-validators');
 const ControllerOnlineDonations = require('../controller/controller-online-donations');
 const {

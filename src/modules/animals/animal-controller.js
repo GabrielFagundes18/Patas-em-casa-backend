@@ -1,8 +1,8 @@
-const animalService = require('../services/animals/animal-service');
-const { auditContext } = require('../services/audit/audit-service');
-const { formatDecimal, sendCsv, toCsv } = require('../utils/csv');
-const { listResponse, successResponse } = require('../utils/http-response');
-const { parsePagination } = require('../utils/pagination');
+const animalService = require('./animal-service');
+const { auditContext } = require('../../services/audit/audit-service');
+const { formatDecimal, sendCsv, toCsv } = require('../../utils/csv');
+const { listResponse, successResponse } = require('../../utils/http-response');
+const { parsePagination } = require('../../utils/pagination');
 
 const EXPORT_COLUMNS = [
   { key: 'id', label: 'ID' },

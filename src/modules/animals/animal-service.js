@@ -1,9 +1,9 @@
 const AppError = require('../../utils/app-error');
 const { parsePagination } = require('../../utils/pagination');
 const { MAX_EXPORT_ROWS, ensureExportLimit } = require('../../utils/csv');
-const animalRepository = require('../../repositories/animals/animal-repository');
-const animalMediaRepository = require('../../repositories/animals/animal-media-repository');
-const auditService = require('../audit/audit-service');
+const animalRepository = require('./animal-repository');
+const animalMediaRepository = require('./animal-media-repository');
+const auditService = require('../../services/audit/audit-service');
 const { createPhotoStorage, detectImage } = require('../../integrations/storage/photo-storage');
 const { assertStatusTransition } = require('./animal-status-rules');
 

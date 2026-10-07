@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createAdopterService } = require('../src/services/adopters/adopter-service');
+const { createAdopterService } = require('../src/modules/adopters/adopter-service');
 
 const adopter = {
   id: 'adotante-1',

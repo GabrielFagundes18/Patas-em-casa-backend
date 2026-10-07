@@ -1,6 +1,6 @@
 const AppError = require('../../utils/app-error');
 const { parseBrasiliaDateTime } = require('../../utils/brasilia-time');
-const adoptionRequestRepository = require('../../repositories/adoptions/adoption-request-repository');
+const adoptionRequestRepository = require('./adoption-request-repository');
 
 const AVAILABLE_ANIMAL_STATUSES = ['disponivel', 'urgente'];
 

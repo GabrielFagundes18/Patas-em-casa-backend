@@ -1,17 +1,17 @@
 const express = require('express');
-const ControllerAnimals = require('../controller/controller-animals-v1');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth, requirePermission } = require('../middleware/auth');
-const validateRequest = require('../middleware/validate-request');
-const { receivePhotos } = require('../middleware/upload');
-const { validateIdParam } = require('../utils/validators');
+const ControllerAnimals = require('./animal-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth, requirePermission } = require('../../middleware/auth');
+const validateRequest = require('../../middleware/validate-request');
+const { receivePhotos } = require('../../middleware/upload');
+const { validateIdParam } = require('../../utils/validators');
 const {
   validateAnimalStatus,
   validateCreateAnimal,
   validatePhotoParams,
   validateListAnimals,
   validateUpdateAnimal,
-} = require('../validators/animals/animal-validators');
+} = require('./animal-validators');
 
 const router = express.Router();
 

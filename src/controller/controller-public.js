@@ -1,5 +1,5 @@
-const animalService = require('../services/animals/animal-service');
-const adoptionRequestService = require('../services/adoptions/adoption-request-service');
+const animalService = require('../modules/animals/animal-service');
+const adoptionRequestService = require('../modules/adoptions/adoption-request-service');
 const adoptionStepService = require('../services/content/adoption-step-service');
 const dashboardService = require('../services/dashboard/dashboard-service');
 const storyService = require('../services/stories/story-service');

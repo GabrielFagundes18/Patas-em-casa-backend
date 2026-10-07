@@ -1,9 +1,9 @@
-const adopterService = require('../services/adopters/adopter-service');
-const { auditContext } = require('../services/audit/audit-service');
-const { hasPermission } = require('../config/permissions');
-const { sendCsv, toCsv } = require('../utils/csv');
-const { listResponse, successResponse } = require('../utils/http-response');
-const { parsePagination } = require('../utils/pagination');
+const adopterService = require('./adopter-service');
+const { auditContext } = require('../../services/audit/audit-service');
+const { hasPermission } = require('../../config/permissions');
+const { sendCsv, toCsv } = require('../../utils/csv');
+const { listResponse, successResponse } = require('../../utils/http-response');
+const { parsePagination } = require('../../utils/pagination');
 
 const EXPORT_COLUMNS = [
   { key: 'id', label: 'ID' },

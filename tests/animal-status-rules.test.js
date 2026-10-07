@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { assertStatusTransition } = require('../src/services/animals/animal-status-rules');
+const { assertStatusTransition } = require('../src/modules/animals/animal-status-rules');
 
 function expectError(input, status, code) {
   assert.throws(() => assertStatusTransition(input), (error) => {

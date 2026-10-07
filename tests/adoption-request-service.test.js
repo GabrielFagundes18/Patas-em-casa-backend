@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const AppError = require('../src/utils/app-error');
-const { createAdoptionRequestService } = require('../src/services/adoptions/adoption-request-service');
-const validateAdoptionRequest = require('../src/validators/adoptions/adoption-request-validator');
+const { createAdoptionRequestService } = require('../src/modules/adoptions/adoption-request-service');
+const validateAdoptionRequest = require('../src/modules/adoptions/adoption-request-validator');
 
 const animalId = '550e8400-e29b-41d4-a716-446655440000';
 const payload = {

@@ -1,9 +1,9 @@
 const express = require('express');
-const ControllerAdoptionRequests = require('../controller/controller-adoption-requests');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth, requirePermission } = require('../middleware/auth');
-const validateRequest = require('../middleware/validate-request');
-const { validateIdParam } = require('../utils/validators');
+const ControllerAdoptionRequests = require('./adoption-request-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth, requirePermission } = require('../../middleware/auth');
+const validateRequest = require('../../middleware/validate-request');
+const { validateIdParam } = require('../../utils/validators');
 const {
   validateAppointmentParams,
   validateBoard,
@@ -13,7 +13,7 @@ const {
   validateReschedule,
   validateSchedule,
   validateUpdateRequest,
-} = require('../validators/adoptions/adoption-triage-validators');
+} = require('./adoption-triage-validators');
 
 const router = express.Router();
 
