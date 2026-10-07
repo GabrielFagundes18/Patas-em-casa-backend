@@ -1,7 +1,7 @@
 const animalService = require('../modules/animals/animal-service');
 const adoptionRequestService = require('../modules/adoptions/adoption-request-service');
-const adoptionStepService = require('../services/content/adoption-step-service');
-const dashboardService = require('../services/dashboard/dashboard-service');
+const adoptionStepService = require('../modules/content/adoption-step-service');
+const dashboardService = require('../modules/dashboard/dashboard-service');
 const storyService = require('../services/stories/story-service');
 const volunteerService = require('../services/volunteers/volunteer-service');
 const { listResponse, successResponse } = require('../utils/http-response');

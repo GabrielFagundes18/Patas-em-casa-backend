@@ -1,7 +1,7 @@
-const onlineDonationService = require('../services/donations/online-donation-service');
-const { auditContext } = require('../modules/audit/audit-service');
-const { listResponse, successResponse } = require('../utils/http-response');
-const { parsePagination } = require('../utils/pagination');
+const onlineDonationService = require('./online-donation-service');
+const { auditContext } = require('../audit/audit-service');
+const { listResponse, successResponse } = require('../../utils/http-response');
+const { parsePagination } = require('../../utils/pagination');
 
 exports.checkout = async (req, res) => {
   return res.status(201).json(successResponse(await onlineDonationService.startCheckout(req.body)));

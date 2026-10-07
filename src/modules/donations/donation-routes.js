@@ -1,19 +1,19 @@
 const express = require('express');
-const ControllerDonations = require('../controller/controller-donations');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth, requirePermission } = require('../middleware/auth');
-const validateRequest = require('../middleware/validate-request');
-const { validateIdParam } = require('../utils/validators');
+const ControllerDonations = require('./donation-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth, requirePermission } = require('../../middleware/auth');
+const validateRequest = require('../../middleware/validate-request');
+const { validateIdParam } = require('../../utils/validators');
 const {
   validateCreateDonation,
   validateListDonations,
   validateMonthly,
   validateSummary,
   validateUpdateDonation,
-} = require('../validators/donations/donation-validators');
+} = require('./donation-validators');
 
-const ControllerOnlineDonations = require('../controller/controller-online-donations');
-const { validateListSubscriptions } = require('../validators/donations/online-donation-validators');
+const ControllerOnlineDonations = require('./online-donation-controller');
+const { validateListSubscriptions } = require('./online-donation-validators');
 
 const router = express.Router();
 

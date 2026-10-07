@@ -1,4 +1,4 @@
-const adoptionStepRepository = require('../../repositories/content/adoption-step-repository');
+const adoptionStepRepository = require('./adoption-step-repository');
 
 function createAdoptionStepService(repository = adoptionStepRepository) {
   async function listActive() {

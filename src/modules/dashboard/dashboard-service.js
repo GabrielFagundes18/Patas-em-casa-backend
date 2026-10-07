@@ -1,4 +1,4 @@
-const dashboardRepository = require('../../repositories/dashboard/dashboard-repository');
+const dashboardRepository = require('./dashboard-repository');
 
 const CACHE_TTL_MS = 15000;
 const SERIES_MONTHS = 12;

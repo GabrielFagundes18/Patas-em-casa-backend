@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createDonationService } = require('../src/services/donations/donation-service');
+const { createDonationService } = require('../src/modules/donations/donation-service');
 
 const donation = {
   id: 'doacao-1',

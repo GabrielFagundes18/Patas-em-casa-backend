@@ -7,12 +7,12 @@ const { validateIdParam, listQueryDetails } = require('../utils/validators');
 const { validateListAnimals } = require('../modules/animals/animal-validators');
 const validateAdoptionRequest = require('../modules/adoptions/adoption-request-validator');
 const { validateVolunteerApplication } = require('../validators/volunteers/volunteer-validators');
-const ControllerOnlineDonations = require('../controller/controller-online-donations');
+const ControllerOnlineDonations = require('../modules/donations/online-donation-controller');
 const {
   validateCancelByToken,
   validateCancelLinkRequest,
   validateCheckout,
-} = require('../validators/donations/online-donation-validators');
+} = require('../modules/donations/online-donation-validators');
 
 // Rotas sem login: só dados públicos. Formulários têm limite de envios por IP.
 const router = express.Router();
