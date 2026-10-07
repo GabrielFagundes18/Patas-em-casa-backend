@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const readline = require('node:readline');
 const bcrypt = require('bcryptjs');
-const pool = require('../src/db/db');
+const pool = require('../src/db/pool');
 const { MIN_PASSWORD_LENGTH, getPasswordProblems } = require('../src/utils/password-policy');
 
 const BCRYPT_ROUNDS = 12;

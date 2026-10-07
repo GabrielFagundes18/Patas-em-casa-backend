@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 
 // Galeria de fotos dos animais (migration 012).
 const COLUMNS = 'id, animal_id, objeto_chave, mime_type, tamanho_bytes, ordem, principal, criado_em';

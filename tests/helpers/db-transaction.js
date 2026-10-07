@@ -1,4 +1,4 @@
-const pool = require('../../src/db/db');
+const pool = require('../../src/db/pool');
 
 function sqlText(query) {
   return typeof query === 'string' ? query : query?.text || '';

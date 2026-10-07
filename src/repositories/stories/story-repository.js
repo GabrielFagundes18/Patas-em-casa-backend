@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 const { buildUpdate, createWhere } = require('../../db/sql');
 
 const SELECT_STORY = `

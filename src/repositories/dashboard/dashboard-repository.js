@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 
 async function kpis() {
   const result = await pool.query('SELECT * FROM vw_kpis_gerais');

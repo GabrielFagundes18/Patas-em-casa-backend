@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 const { buildUpdate } = require('../../db/sql');
 
 // Doações online pelo Mercado Pago (migration 013): pagamentos únicos, assinaturas mensais e o registro

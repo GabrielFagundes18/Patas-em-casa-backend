@@ -1,4 +1,4 @@
-const { testConnection } = require('../config/db');
+const { testConnection } = require('../db/connection-check');
 
 exports.getApiInfo = (req, res) => {
   return res.json({

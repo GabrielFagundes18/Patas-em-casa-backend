@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 
 // Links de redefinição de senha e convite (migration 010). Só o hash do token é guardado.
 async function invalidatePending(db = pool, usuarioId) {

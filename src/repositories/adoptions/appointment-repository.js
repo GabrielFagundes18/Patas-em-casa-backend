@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 const { buildUpdate } = require('../../db/sql');
 
 // Agenda de visitas e entrevistas dos pedidos de adoção (migration 011).

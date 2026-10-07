@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 
 const UNAVAILABLE_RECHECK_MS = 60000;
 let tableAvailable = false;

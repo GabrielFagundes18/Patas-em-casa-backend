@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 
 // Sessões do painel (migration 010). O cookie de renovação carrega o id da sessão; revogar aqui
 // derruba o acesso mesmo que o token ainda não tenha expirado.

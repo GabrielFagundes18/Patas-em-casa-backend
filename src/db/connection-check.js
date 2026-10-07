@@ -1,4 +1,4 @@
-const pool = require('../db/db');
+const pool = require('./pool');
 
 const connectionString = process.env.DATABASE_URL || '';
 const CONNECTION_ATTEMPTS = 3;

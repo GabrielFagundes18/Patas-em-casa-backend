@@ -1,5 +1,5 @@
 const app = require('./src/app');
-const { pool } = require('./src/config/db');
+const { pool } = require('./src/db/connection-check');
 const { readConfig } = require('./src/config/env');
 const logger = require('./src/utils/logger');
 

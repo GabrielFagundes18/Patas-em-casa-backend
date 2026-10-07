@@ -1,4 +1,4 @@
-const pool = require('../../db/db');
+const pool = require('../../db/pool');
 const { buildUpdate, createWhere } = require('../../db/sql');
 
 const PUBLIC_COLUMNS = 'id, nome, email, cargo, ativo, criado_em';

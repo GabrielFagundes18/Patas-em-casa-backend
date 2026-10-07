@@ -1,4 +1,4 @@
-const pool = require('./db');
+const pool = require('./pool');
 
 // Executa work(client) dentro de BEGIN/COMMIT; qualquer erro desfaz tudo (ROLLBACK).
 // Se o ROLLBACK falhar, a conexão é descartada em vez de voltar ao pool.

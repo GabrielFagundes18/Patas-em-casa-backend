@@ -9,7 +9,7 @@ process.env.UPLOAD_DIR = fsSync.mkdtempSync(pathModule.join(os.tmpdir(), 'patas-
 test.after(() => fsSync.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true }));
 const bcrypt = require('bcryptjs');
 require('../../src/config/env');
-const pool = require('../../src/db/db');
+const pool = require('../../src/db/pool');
 const app = require('../../src/app');
 const { withRollback } = require('../helpers/db-transaction');
 const { readOrder } = require('../../scripts/migrar');
