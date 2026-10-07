@@ -2,7 +2,7 @@ const AppError = require('../../utils/app-error');
 const { parsePagination } = require('../../utils/pagination');
 const withTransaction = require('../../db/transaction');
 const volunteerRepository = require('../../repositories/volunteers/volunteer-repository');
-const auditService = require('../audit/audit-service');
+const auditService = require('../../modules/audit/audit-service');
 
 const EDITABLE_FIELDS = ['nome', 'email', 'telefone', 'status', 'data_inicio'];
 

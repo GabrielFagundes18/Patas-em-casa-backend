@@ -1,5 +1,5 @@
 const onlineDonationService = require('../services/donations/online-donation-service');
-const { auditContext } = require('../services/audit/audit-service');
+const { auditContext } = require('../modules/audit/audit-service');
 const { listResponse, successResponse } = require('../utils/http-response');
 const { parsePagination } = require('../utils/pagination');
 

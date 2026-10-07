@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createAuthService } = require('../src/services/auth/auth-service');
-const { createAccessLinkService, hashToken } = require('../src/services/auth/access-link-service');
-const { createLoginThrottle } = require('../src/services/auth/login-throttle');
+const { createAuthService } = require('../src/modules/auth/auth-service');
+const { createAccessLinkService, hashToken } = require('../src/modules/auth/access-link-service');
+const { createLoginThrottle } = require('../src/modules/auth/login-throttle');
 const { createFakeSessions } = require('./helpers/fake-sessions');
 
 const user = {

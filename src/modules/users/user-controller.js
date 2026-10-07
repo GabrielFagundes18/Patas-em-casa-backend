@@ -1,8 +1,8 @@
-const userService = require('../services/users/user-service');
-const { auditContext } = require('../services/audit/audit-service');
-const { getPermissionMatrix } = require('../config/permissions');
-const { listResponse, successResponse } = require('../utils/http-response');
-const { parsePagination } = require('../utils/pagination');
+const userService = require('./user-service');
+const { auditContext } = require('../audit/audit-service');
+const { getPermissionMatrix } = require('../../config/permissions');
+const { listResponse, successResponse } = require('../../utils/http-response');
+const { parsePagination } = require('../../utils/pagination');
 
 exports.list = async (req, res) => {
   const { items, total } = await userService.list(req.query);

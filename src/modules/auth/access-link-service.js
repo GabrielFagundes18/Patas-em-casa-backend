@@ -2,7 +2,7 @@ const { createHash, randomBytes } = require('node:crypto');
 const { readConfig } = require('../../config/env');
 const { roleLabels } = require('../../config/permissions');
 const logger = require('../../utils/logger');
-const accessLinkRepository = require('../../repositories/auth/access-link-repository');
+const accessLinkRepository = require('./access-link-repository');
 const defaultMailer = require('../../integrations/email/mailer');
 const { buildInviteEmail, buildPasswordResetEmail } = require('../../integrations/email/account-emails');
 

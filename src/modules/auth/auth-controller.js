@@ -1,8 +1,8 @@
-const authService = require('../services/auth/auth-service');
-const auditService = require('../services/audit/audit-service');
-const { readConfig } = require('../config/env');
-const { parseCookies, serializeCookie } = require('../utils/cookies');
-const { successResponse } = require('../utils/http-response');
+const authService = require('./auth-service');
+const auditService = require('../audit/audit-service');
+const { readConfig } = require('../../config/env');
+const { parseCookies, serializeCookie } = require('../../utils/cookies');
+const { successResponse } = require('../../utils/http-response');
 
 const { nodeEnv, sessionIdleMinutes } = readConfig();
 const REFRESH_COOKIE = 'patas_refresh';

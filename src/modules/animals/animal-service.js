@@ -3,7 +3,7 @@ const { parsePagination } = require('../../utils/pagination');
 const { MAX_EXPORT_ROWS, ensureExportLimit } = require('../../utils/csv');
 const animalRepository = require('./animal-repository');
 const animalMediaRepository = require('./animal-media-repository');
-const auditService = require('../../services/audit/audit-service');
+const auditService = require('../audit/audit-service');
 const { createPhotoStorage, detectImage } = require('../../integrations/storage/photo-storage');
 const { assertStatusTransition } = require('./animal-status-rules');
 

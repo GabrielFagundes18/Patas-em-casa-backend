@@ -4,7 +4,7 @@ const { maskContactsInText, maskEmail, maskPhone } = require('../../utils/maskin
 const { parsePagination } = require('../../utils/pagination');
 const withTransaction = require('../../db/transaction');
 const adopterRepository = require('./adopter-repository');
-const auditService = require('../../services/audit/audit-service');
+const auditService = require('../audit/audit-service');
 
 const EDITABLE_FIELDS = ['nome', 'email', 'telefone', 'cidade', 'estado', 'endereco', 'status'];
 

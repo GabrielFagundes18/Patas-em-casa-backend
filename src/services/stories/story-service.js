@@ -1,7 +1,7 @@
 const AppError = require('../../utils/app-error');
 const { parsePagination } = require('../../utils/pagination');
 const storyRepository = require('../../repositories/stories/story-repository');
-const auditService = require('../audit/audit-service');
+const auditService = require('../../modules/audit/audit-service');
 
 const EDITABLE_FIELDS = ['autor_nome', 'texto', 'foto_url', 'publicado', 'animal_id', 'adotante_id'];
 

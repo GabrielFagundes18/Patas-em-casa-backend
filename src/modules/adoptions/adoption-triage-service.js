@@ -8,7 +8,7 @@ const { parsePagination } = require('../../utils/pagination');
 const withTransaction = require('../../db/transaction');
 const triageRepository = require('./adoption-triage-repository');
 const appointmentRepository = require('./appointment-repository');
-const auditService = require('../../services/audit/audit-service');
+const auditService = require('../audit/audit-service');
 const defaultMailer = require('../../integrations/email/mailer');
 const {
   buildAppointmentCancelledEmail,

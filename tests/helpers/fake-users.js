@@ -1,4 +1,4 @@
-const userRepository = require('../../src/repositories/auth/user-repository');
+const userRepository = require('../../src/modules/users/user-repository');
 const { signToken } = require('../../src/middleware/auth');
 
 // Um usuário fictício por cargo; o middleware de autenticação consulta o "banco" a cada requisição.

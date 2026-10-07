@@ -2,8 +2,8 @@ const jwt = require('jsonwebtoken');
 const AppError = require('../utils/app-error');
 const { getPermissionsForRole, hasPermission } = require('../config/permissions');
 const { readConfig } = require('../config/env');
-const userRepository = require('../repositories/auth/user-repository');
-const sessionRepository = require('../repositories/auth/session-repository');
+const userRepository = require('../modules/users/user-repository');
+const sessionRepository = require('../modules/auth/session-repository');
 const { UUID_PATTERN } = require('../utils/validators');
 
 const { jwtSecret } = readConfig();

@@ -6,8 +6,8 @@ const { maskContactsInText, maskEmail, maskPhone } = require('../src/utils/maski
 const { parseCookies, serializeCookie } = require('../src/utils/cookies');
 const { getPasswordProblems } = require('../src/utils/password-policy');
 const rateLimit = require('../src/middleware/rate-limit');
-const { createLoginThrottle } = require('../src/services/auth/login-throttle');
-const { createAuthService } = require('../src/services/auth/auth-service');
+const { createLoginThrottle } = require('../src/modules/auth/login-throttle');
+const { createAuthService } = require('../src/modules/auth/auth-service');
 const { readConfig } = require('../src/config/env');
 const { createFakeSessions } = require('./helpers/fake-sessions');
 

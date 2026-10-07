@@ -13,7 +13,7 @@ const pool = require('../../src/db/pool');
 const app = require('../../src/app');
 const { withRollback } = require('../helpers/db-transaction');
 const { readOrder } = require('../../scripts/migrar');
-const accessLinks = require('../../src/services/auth/access-link-service');
+const accessLinks = require('../../src/modules/auth/access-link-service');
 const { createOnlineDonationService } = require('../../src/services/donations/online-donation-service');
 
 const PASSWORD = 'Integracao-Teste-123';

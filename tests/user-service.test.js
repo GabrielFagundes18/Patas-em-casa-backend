@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { createUserService } = require('../src/services/users/user-service');
+const { createUserService } = require('../src/modules/users/user-service');
 const { createFakeSessions } = require('./helpers/fake-sessions');
 
 const ADMIN_ID = '11111111-1111-4111-8111-111111111111';

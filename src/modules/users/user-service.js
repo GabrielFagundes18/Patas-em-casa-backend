@@ -4,8 +4,8 @@ const AppError = require('../../utils/app-error');
 const { getPermissionsForRole } = require('../../config/permissions');
 const { getPasswordProblems } = require('../../utils/password-policy');
 const { parsePagination } = require('../../utils/pagination');
-const userRepository = require('../../repositories/auth/user-repository');
-const sessionRepository = require('../../repositories/auth/session-repository');
+const userRepository = require('./user-repository');
+const sessionRepository = require('../auth/session-repository');
 const auditService = require('../audit/audit-service');
 const accessLinkService = require('../auth/access-link-service');
 

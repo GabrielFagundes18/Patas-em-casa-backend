@@ -3,7 +3,7 @@ const { MAX_EXPORT_ROWS, ensureExportLimit } = require('../../utils/csv');
 const { maskEmail } = require('../../utils/masking');
 const { parsePagination } = require('../../utils/pagination');
 const donationRepository = require('../../repositories/donations/donation-repository');
-const auditService = require('../audit/audit-service');
+const auditService = require('../../modules/audit/audit-service');
 
 const EDITABLE_FIELDS = ['adotante_id', 'doador_nome', 'doador_email', 'tipo', 'valor', 'metodo', 'status', 'data'];
 

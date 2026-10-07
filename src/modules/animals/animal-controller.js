@@ -1,5 +1,5 @@
 const animalService = require('./animal-service');
-const { auditContext } = require('../../services/audit/audit-service');
+const { auditContext } = require('../audit/audit-service');
 const { formatDecimal, sendCsv, toCsv } = require('../../utils/csv');
 const { listResponse, successResponse } = require('../../utils/http-response');
 const { parsePagination } = require('../../utils/pagination');

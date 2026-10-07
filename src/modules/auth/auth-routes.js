@@ -1,13 +1,13 @@
 const express = require('express');
-const ControllerAuth = require('../controller/controller-auth');
-const asyncHandler = require('../middleware/async-handler');
-const { requireAuth } = require('../middleware/auth');
-const requireAjaxHeader = require('../middleware/csrf');
-const rateLimit = require('../middleware/rate-limit');
-const validateRequest = require('../middleware/validate-request');
-const validateLogin = require('../validators/auth/login-validator');
-const validateChangePassword = require('../validators/auth/change-password-validator');
-const { validateForgotPassword, validateResetPassword } = require('../validators/auth/password-reset-validators');
+const ControllerAuth = require('./auth-controller');
+const asyncHandler = require('../../middleware/async-handler');
+const { requireAuth } = require('../../middleware/auth');
+const requireAjaxHeader = require('../../middleware/csrf');
+const rateLimit = require('../../middleware/rate-limit');
+const validateRequest = require('../../middleware/validate-request');
+const validateLogin = require('./login-validator');
+const validateChangePassword = require('./change-password-validator');
+const { validateForgotPassword, validateResetPassword } = require('./password-reset-validators');
 
 const router = express.Router();
 const loginRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
