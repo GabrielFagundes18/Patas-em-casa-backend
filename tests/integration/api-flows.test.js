@@ -1,21 +1,62 @@
+/*
+ * ============================================================================
+ * ARQUIVO: api-flows.test.js (teste de INTEGRAÇÃO)
+ * ============================================================================
+ *
+ * PARA QUE SERVE:
+ *   Testa os FLUXOS COMPLETOS da API contra o BANCO DE DADOS REAL (PostgreSQL),
+ *   sem deixar nenhum dado gravado: tudo roda dentro de uma transação que é
+ *   desfeita no fim (withRollback). Cobre login e sessões, redefinição de senha
+ *   e convite, animais e fotos, adoção (pedido público, triagem, aprovação,
+ *   agenda), adotantes (LGPD), doações (manuais e online com gateway simulado),
+ *   voluntários, histórias, equipe e dashboard.
+ *   Rodar com: npm run test:integration (precisa de DATABASE_URL; sem ela, o teste é pulado).
+ *   Com INTEGRACAO_BANCO_VAZIO=1, os fluxos rodam num schema vazio criado a partir das
+ *   migrations de migrations/ordem.json (simula um banco novo).
+ *
+ * PRINCIPAIS ITENS:
+ *   - PASSWORD, NEW_PASSWORD, EMAIL_SUFFIX (e-mails de teste em domínio .invalid).
+ *   - freshSchemaSql: SQL para o schema vazio (opcional).
+ *   - request(), createAnimal(), publicAdoptionRequest(): funções auxiliares.
+ *   - 1 teste principal com 14 subtestes (t.test), que compartilham o mesmo banco e token.
+ *
+ * CONEXÕES COM OUTROS ARQUIVOS:
+ *   - src/app.js, src/db/pool.js, src/config/env.js, tests/helpers/db-transaction.js,
+ *     scripts/migrar.js (readOrder), auth/access-link-service, donations/online-donation-service.
+ * ============================================================================
+ */
+
+// Verificações.
 const assert = require('node:assert/strict');
+// Executor de testes.
 const test = require('node:test');
+// Sistema operacional, arquivos e caminhos (para a pasta temporária de fotos).
 const os = require('node:os');
 const fsSync = require('node:fs');
 const pathModule = require('node:path');
 
 // Fotos do teste vão para uma pasta temporária (a configuração é lida quando o app é carregado).
+// Por isso estas linhas vêm ANTES do require do app.
 process.env.UPLOAD_DIR = fsSync.mkdtempSync(pathModule.join(os.tmpdir(), 'patas-integracao-uploads-'));
+// No fim de tudo, apaga a pasta temporária.
 test.after(() => fsSync.rmSync(process.env.UPLOAD_DIR, { recursive: true, force: true }));
+// Hash de senhas.
 const bcrypt = require('bcryptjs');
+// Carrega a configuração (e o .env).
 require('../../src/config/env');
+// Pool real e aplicação real.
 const pool = require('../../src/db/pool');
 const app = require('../../src/app');
+// Transação que sempre é desfeita.
 const { withRollback } = require('../helpers/db-transaction');
+// Leitura das migrations (para o schema vazio).
 const { readOrder } = require('../../scripts/migrar');
+// Links de acesso (para gerar um link de convite diretamente).
 const accessLinks = require('../../src/modules/auth/access-link-service');
+// Fábrica do service de doações online (para usar com um gateway simulado).
 const { createOnlineDonationService } = require('../../src/modules/donations/online-donation-service');
 
+// Senhas e sufixo dos e-mails de teste (".invalid" é um domínio reservado, que nunca recebe e-mails).
 const PASSWORD = 'Integracao-Teste-123';
 const NEW_PASSWORD = 'Integracao-Nova-456';
 const EMAIL_SUFFIX = '.integracao@example.invalid';
@@ -25,12 +66,20 @@ const freshSchemaSql = process.env.INTEGRACAO_BANCO_VAZIO === '1'
   : undefined;
 
 // Todos os fluxos rodam no banco real dentro de uma transação desfeita ao final (withRollback).
+// { skip: ... } pula o teste (com a mensagem) quando não há DATABASE_URL.
 test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { skip: !process.env.DATABASE_URL && 'DATABASE_URL não configurada' }, async (t) => {
   await withRollback(async (db) => {
+    // Servidor numa porta livre e o token do usuário logado (muda ao longo dos subtestes).
     const server = app.listen(0);
     const baseUrl = `http://127.0.0.1:${server.address().port}`;
     let token;
 
+    /*
+     * FUNÇÃO: request
+     * O que faz: faz uma requisição à API; manda o token se auth for true; converte o corpo em JSON;
+     *   lê a resposta como JSON (ou texto, ex.: CSV).
+     * Retorno: { status, data, headers }.
+     */
     async function request(method, path, { body, auth = true, headers = {} } = {}) {
       const response = await fetch(`${baseUrl}${path}`, {
         method,
@@ -46,12 +95,20 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
       return { status: response.status, data, headers: response.headers };
     }
 
+    /*
+     * FUNÇÃO: createAnimal
+     * O que faz: cadastra um animal pelo painel (padrão: cachorro médio macho) e confere o 201.
+     */
     async function createAnimal(nome, extra = {}) {
       const response = await request('POST', '/api/v1/animals', { body: { nome, especie: 'cachorro', porte: 'medio', sexo: 'macho', ...extra } });
       assert.equal(response.status, 201, JSON.stringify(response.data));
       return response.data.data;
     }
 
+    /*
+     * FUNÇÃO: publicAdoptionRequest
+     * O que faz: envia o formulário público de adoção (sem login) para um animal e e-mail.
+     */
     async function publicAdoptionRequest(animalId, email, extra = {}) {
       return request('POST', '/api/v1/public/adoption-requests', {
         auth: false,
@@ -70,6 +127,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
     }
 
     try {
+      // Cria dois usuários de teste direto no banco: um administrador e um gestor de animais.
       const hash = await bcrypt.hash(PASSWORD, 10);
       const insertUser = (prefix, cargo) => db.query(
         'INSERT INTO usuarios (nome, email, senha_hash, cargo) VALUES ($1, $2, $3, $4) RETURNING id',
@@ -78,6 +136,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
       const admin = (await insertUser('admin', 'administrador')).rows[0];
       const manager = (await insertUser('gestor', 'gestor_animais')).rows[0];
 
+      // Subteste 1: login (e-mail em maiúsculas), cookie de renovação, refresh, /me e troca de senha.
       await t.test('login, renovação por cookie, /me e troca de senha', async () => {
         const login = await request('POST', '/api/v1/auth/login', { auth: false, body: { email: `ADMIN${EMAIL_SUFFIX}`, password: PASSWORD } });
         assert.equal(login.status, 200);
@@ -85,6 +144,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         const cookie = login.headers.get('set-cookie');
         assert.match(cookie, /patas_refresh=.+; Max-Age=\d+; Path=\/api\/v1\/auth; HttpOnly; SameSite=Strict/);
 
+        // Envia só "nome=valor" do cookie (a parte antes do primeiro ";") + o cabeçalho anti-CSRF.
         const refresh = await request('POST', '/api/v1/auth/refresh', {
           auth: false,
           headers: { Cookie: cookie.split(';')[0], 'X-Requested-With': 'XMLHttpRequest' },
@@ -95,6 +155,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         const me = await request('GET', '/api/v1/me');
         assert.equal(me.data.data.cargo, 'administrador');
 
+        // Troca a senha: a antiga deixa de funcionar e a nova funciona.
         const change = await request('PATCH', '/api/v1/me/password', { body: { senha_atual: PASSWORD, nova_senha: NEW_PASSWORD } });
         assert.equal(change.status, 204);
         const oldPassword = await request('POST', '/api/v1/auth/login', { auth: false, body: { email: `admin${EMAIL_SUFFIX}`, password: PASSWORD } });
@@ -103,6 +164,8 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(newPassword.status, 200);
       });
 
+      // Subteste 2: logout revoga a sessão; "esqueci a senha" responde 202; link inválido 400;
+      // convite → definir senha pelo link (uso único) → login com o cargo do convite.
       await t.test('sessões revogáveis, esqueci a senha, link de redefinição e convite', async () => {
         const mainToken = token;
         const login = await request('POST', '/api/v1/auth/login', { auth: false, body: { email: `admin${EMAIL_SUFFIX}`, password: NEW_PASSWORD } });
@@ -112,9 +175,11 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
 
         const logout = await request('POST', '/api/v1/auth/logout', { auth: false, headers: { Cookie: cookie, 'X-Requested-With': 'XMLHttpRequest' } });
         assert.equal(logout.status, 204);
+        // O token de acesso da sessão encerrada para de valer na hora.
         assert.equal((await request('GET', '/api/v1/me')).status, 401);
         const refreshAfterLogout = await request('POST', '/api/v1/auth/refresh', { auth: false, headers: { Cookie: cookie, 'X-Requested-With': 'XMLHttpRequest' } });
         assert.equal(refreshAfterLogout.status, 401);
+        // A sessão principal (outra) continua valendo.
         token = mainToken;
         assert.equal((await request('GET', '/api/v1/me')).status, 200);
 
@@ -128,8 +193,10 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
           body: { nome: 'Convidada de integração', email: `convite${EMAIL_SUFFIX}`, cargo: 'gestor_ong', enviar_convite: true },
         });
         assert.equal(invited.status, 201);
+        // Com ou sem SMTP no ambiente, "enviado" precisa ser booleano.
         assert.equal(typeof invited.data.data.convite.enviado, 'boolean');
 
+        // Gera um link de convite direto pelo service (sem depender de e-mail) e usa o token.
         const { url } = await accessLinks.issue({ id: invited.data.data.id }, 'convite');
         const inviteToken = new URL(url).searchParams.get('token');
         const defined = await request('POST', '/api/v1/auth/reset-password', { auth: false, body: { token: inviteToken, nova_senha: 'SenhaDoConvite2026' } });
@@ -142,6 +209,8 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(invitedLogin.data.data.user.permissions.includes('team:read'), false);
       });
 
+      // Subteste 3: status do animal (motivo obrigatório, transição inválida), visibilidade no site,
+      // campos públicos, exportação CSV e exclusão.
       await t.test('animais: cadastro, máquina de estados, exportação e visão pública', async () => {
         const animal = await createAnimal('Integração Estados', { especie: 'gato', porte: 'pequeno', sexo: 'femea' });
 
@@ -153,12 +222,14 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(deactivated.data.data.status, 'inativo');
         const invalid = await request('PATCH', `/api/v1/animals/${animal.id}/status`, { body: { status: 'adotado' } });
         assert.equal(invalid.status, 409);
+        // Inativo não aparece no site.
         const hiddenFromPublic = await request('GET', `/api/v1/public/animals/${animal.id}`, { auth: false });
         assert.equal(hiddenFromPublic.status, 404);
 
         await request('PATCH', `/api/v1/animals/${animal.id}/status`, { body: { status: 'disponivel' } });
         const publicAnimal = await request('GET', `/api/v1/public/animals/${animal.id}`, { auth: false });
         assert.equal(publicAnimal.status, 200);
+        // Datas internas não vão para o site.
         assert.equal(Object.hasOwn(publicAnimal.data.data, 'criado_em'), false);
 
         const csv = await request('GET', `/api/v1/animals/export?q=${encodeURIComponent('Integração Estados')}`);
@@ -170,12 +241,17 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal((await request('GET', `/api/v1/animals/${animal.id}`)).status, 404);
       });
 
+      // Ids dos adotantes do subteste de adoção, usados depois no subteste de adotantes (LGPD).
       let approvedAdopterId;
       let rejectedAdopterId;
 
+      // Subteste 4: envio real de fotos (multipart/form-data), arquivo servido em /uploads, arquivo falso
+      // recusado, temperamento, troca da principal, remoção (o arquivo some) e exclusão do animal.
       await t.test('fotos: upload, arquivo servido, principal, remoção e temperamento no perfil público', async () => {
         const animal = await createAnimal('Integração Fotos');
+        // PNG válido de 1×1 pixel.
         const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cf000000030101005f4f8d3f0000000049454e44ae426082', 'hex');
+        // Envia arquivos com FormData (o mesmo formato que um <form> com <input type="file"> usaria).
         const upload = async (files) => {
           const form = new FormData();
           for (const [name, content, type] of files) form.append('fotos', new Blob([content], { type }), name);
@@ -189,11 +265,13 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(first.principal, true);
         assert.equal(sent.data.data.foto_url, first.url);
 
+        // O arquivo é servido pela própria API com o tipo certo e liberado para outras origens.
         const file = await fetch(`${baseUrl}${new URL(first.url).pathname}`);
         assert.equal(file.status, 200);
         assert.equal(file.headers.get('content-type'), 'image/png');
         assert.equal(file.headers.get('cross-origin-resource-policy'), 'cross-origin');
 
+        // "PNG" que na verdade é texto: recusado pelo conteúdo.
         const fake = await upload([['foto.png', Buffer.from('<script>alert(1)</script>'), 'image/png']]);
         assert.equal(fake.status, 422);
         assert.equal(fake.data.error.code, 'ARQUIVO_INVALIDO');
@@ -210,10 +288,13 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.deepEqual(publicView.data.data.temperamento, ['calmo', 'convive com gatos']);
         assert.deepEqual(publicView.data.data.fotos.map((foto) => foto.url), [second.url]);
 
+        // Excluir o animal apaga também os arquivos.
         await request('DELETE', `/api/v1/animals/${animal.id}`);
         assert.equal((await fetch(`${baseUrl}${new URL(second.url).pathname}`)).status, 404);
       });
 
+      // Subteste 5: dois pedidos públicos → lista mascarada → quadro → mover para visita com responsável →
+      // aprovar (o outro é reprovado) → não decide de novo → site responde 410 → termo → revelar contatos.
       await t.test('adoção: pedido público, triagem, aprovação em transação e termo', async () => {
         const animal = await createAnimal('Integração Adoção');
         const first = await publicAdoptionRequest(animal.id, `primeiro${EMAIL_SUFFIX}`);
@@ -266,6 +347,9 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(revealed.data.data.adotante.email, `segundo${EMAIL_SUFFIX}`);
       });
 
+      // Subteste 6: data preferida (futura aceita, passada recusada), agendamento com responsável,
+      // conflito (409) e horário seguido (ok), remarcação, item na agenda do dashboard, cancelamento e conclusão.
+      // Datas em 2099 garantem que fiquem sempre no futuro.
       await t.test('agenda: data preferida, conflito de horário, remarcação, cancelamento e painel', async () => {
         const animal = await createAnimal('Integração Agenda');
         const created = await publicAdoptionRequest(animal.id, `agenda1${EMAIL_SUFFIX}`, { visita_preferida_em: '2099-05-10T10:00' });
@@ -287,6 +371,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(visit.data_hora, '2099-05-10T10:00');
         assert.equal(scheduled.data.data.pedido.status, 'visita_agendada');
 
+        // Outro pedido, mesmo responsável: 10:30 conflita com 10:00–11:00; 11:00 não conflita.
         const otherAnimal = await createAnimal('Integração Agenda 2');
         await publicAdoptionRequest(otherAnimal.id, `agenda2${EMAIL_SUFFIX}`);
         const other = (await request('GET', `/api/v1/adoption-requests?animal_id=${otherAnimal.id}`)).data.data[0];
@@ -300,6 +385,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         });
         assert.equal(backToBack.status, 200);
 
+        // Remarcar para 10:45 conflita com a entrevista das 11:00; 09:00 funciona e mantém o local.
         const overlapping = await request('PATCH', `/api/v1/adoption-requests/${pedido.id}/appointments/${visit.id}`, { body: { data_hora: '2099-05-10T10:45' } });
         assert.equal(overlapping.status, 409);
         const moved = await request('PATCH', `/api/v1/adoption-requests/${pedido.id}/appointments/${visit.id}`, { body: { data_hora: '2099-05-10T09:00' } });
@@ -307,6 +393,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(moved.data.data.agendamento.data_hora, '2099-05-10T09:00');
         assert.equal(moved.data.data.agendamento.local, 'Rua das Flores, 10');
 
+        // 09:00 em Brasília = 12:00 UTC.
         const summary = await request('GET', '/api/v1/dashboard/summary?atualizar=true');
         const agendaItem = summary.data.data.agenda.find((item) => item.id === visit.id);
         assert.equal(agendaItem.tipo, 'visita');
@@ -321,6 +408,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(done.data.data.pedido.agendamentos[0].status, 'realizado');
       });
 
+      // Subteste 7: reprovar o único pedido de um animal "em_processo" o devolve para "disponivel".
       await t.test('adoção: reprovar o último pedido devolve o animal para disponível', async () => {
         const animal = await createAnimal('Integração Reprovação');
         const created = await publicAdoptionRequest(animal.id, `terceiro${EMAIL_SUFFIX}`);
@@ -335,6 +423,8 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(rejected.data.data.animal.status, 'disponivel');
       });
 
+      // Subteste 8: LGPD na prática — busca mascarada, histórico, revelar, exportar dados do titular,
+      // anonimizar (uma vez só), excluir e exportar CSV.
       await t.test('adotantes: mascaramento, revelação, exportação LGPD, anonimização e exclusão', async () => {
         const search = await request('GET', `/api/v1/adopters?q=${encodeURIComponent(`segundo${EMAIL_SUFFIX}`)}`);
         assert.equal(search.data.meta.total, 1);
@@ -369,6 +459,8 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.match(csv.data, /^ID;Nome;E-mail/);
       });
 
+      // Subteste 9: doação manual — cadastro (valor numérico), confirmar, resumo e série pelas views,
+      // CSV mascarado com vírgula decimal, cancelar e não poder editar depois.
       await t.test('doações: registro, resumo pelas views, cancelamento definitivo e CSV', async () => {
         const created = await request('POST', '/api/v1/donations', {
           body: { doador_nome: 'Doador Integração', doador_email: 'doador@example.invalid', tipo: 'unica', valor: 42.5, metodo: 'pix', status: 'pendente' },
@@ -391,6 +483,9 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(locked.data.error.code, 'DOACAO_CANCELADA');
       });
 
+      // Subteste 10: doações online com SQL real e Mercado Pago simulado — 503 sem credenciais; pagamento
+      // por boleto confirmado via webhook; status público; edição manual bloqueada; assinatura ativada,
+      // cobrança mensal repetida não duplica; listagem no painel; cancelar pelo painel (503 sem credenciais).
       await t.test('doações online: SQL real com gateway simulado, status público e painel', async () => {
         // Sem credenciais no ambiente de teste, as rotas públicas respondem 503.
         const unavailable = await request('POST', '/api/v1/public/donations/checkout', {
@@ -399,6 +494,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(unavailable.status, 503);
         assert.equal(unavailable.data.error.code, 'PAGAMENTO_INDISPONIVEL');
 
+        // Service próprio com gateway falso (estado "remoto" nos Maps) e o repository real.
         const remote = { payments: new Map(), preapprovals: new Map(), charges: new Map() };
         const online = createOnlineDonationService({
           config: { frontendUrl: 'https://patas.example', apiPublicUrl: 'https://api.patas.example', mercadoPago: { accessToken: 'TEST-x', webhookSecret: 'x' } },
@@ -413,6 +509,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
           mailer: { isConfigured: () => false },
           audit: { record: async () => {} },
         });
+        // Assina avisos de teste com o segredo "x".
         const { createHmac } = require('node:crypto');
         const sign = (id, requestId) => ({
           'x-request-id': requestId,
@@ -436,6 +533,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         remote.preapprovals.set('pre-int', { id: 'pre-int', status: 'authorized', external_reference: monthly.referencia });
         await online.handleWebhook({ headers: sign('pre-int', 'r2'), query: { 'data.id': 'pre-int', type: 'subscription_preapproval' }, body: { id: 'int-n2' } });
         remote.charges.set('ap-int', { id: 'ap-int', preapproval_id: 'pre-int', transaction_amount: 25, payment: { id: 6001, status: 'approved' } });
+        // A mesma cobrança avisada duas vezes (avisos diferentes): o upsert evita duplicar o pagamento.
         for (const requestId of ['r3', 'r4']) {
           await online.handleWebhook({ headers: sign('ap-int', requestId), query: { 'data.id': 'ap-int', type: 'subscription_authorized_payment' }, body: { id: `int-${requestId}` } });
         }
@@ -443,10 +541,13 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         const subscriptions = await request('GET', '/api/v1/donations/subscriptions?status=ativa');
         const listed = subscriptions.data.data.find((item) => item.id === monthly.referencia);
         assert.deepEqual([listed.status, listed.pagamentos_confirmados, listed.total_arrecadado], ['ativa', 1, 25]);
+        // A rota do painel usa o service padrão (sem credenciais no teste) → 503.
         const cancelled = await request('POST', `/api/v1/donations/subscriptions/${monthly.referencia}/cancel`);
         assert.equal(cancelled.status, 503);
       });
 
+      // Subteste 11: voluntários — áreas ordenadas, troca de áreas, filtro por área, inscrição pública com
+      // e-mail existente (mesmo protocolo, sem alterar nada), inscrição nova "inativa" e exclusão.
       await t.test('voluntários: áreas em transação, inscrição pública idempotente e exclusão', async () => {
         const created = await request('POST', '/api/v1/volunteers', {
           body: { nome: 'Voluntária Integração', email: `voluntaria${EMAIL_SUFFIX}`, telefone: '(11) 97777-6666', areas: ['passeios', 'eventos'] },
@@ -478,6 +579,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal((await request('DELETE', `/api/v1/volunteers/${id}`)).status, 204);
       });
 
+      // Subteste 12: história só aparece no site depois de publicada, e sem adotante_id.
       await t.test('histórias: só aparecem no site depois de publicadas e sem dados do adotante', async () => {
         const created = await request('POST', '/api/v1/stories', {
           body: { autor_nome: 'Autora Integração', texto: 'Uma história de teste com mais de dez caracteres.', publicado: false },
@@ -497,6 +599,8 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal((await request('DELETE', `/api/v1/stories/${id}`)).status, 204);
       });
 
+      // Subteste 13: equipe — senha fraca, cadastro, e-mail repetido, auto-desativação bloqueada,
+      // desativação de outro membro e login dele recusado.
       await t.test('equipe: política de senha, proteções do administrador e desativação', async () => {
         const weak = await request('POST', '/api/v1/users', {
           body: { nome: 'Novo Integração', email: `novo${EMAIL_SUFFIX}`, cargo: 'voluntariado', senha: 'curta' },
@@ -521,6 +625,7 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.equal(blockedLogin.status, 401);
       });
 
+      // Subteste 14: dashboard (12 meses, indicadores) e conteúdo público (passos e catálogo só com status públicos).
       await t.test('dashboard e conteúdo público', async () => {
         const summary = await request('GET', '/api/v1/dashboard/summary?atualizar=true');
         assert.equal(summary.status, 200);
@@ -533,11 +638,35 @@ test('fluxos completos da API v1 no banco real, sem deixar dados gravados', { sk
         assert.ok(animals.data.data.every((animal) => ['disponivel', 'urgente'].includes(animal.status)));
       });
     } finally {
+      // Sempre fecha o servidor, mesmo se algum subteste falhar.
       await new Promise((resolve) => server.close(resolve));
     }
   }, { freshSchemaSql });
 
+  // Prova de que nada ficou gravado: nenhum usuário com o sufixo de teste existe depois do ROLLBACK.
   const leftovers = await pool.query('SELECT COUNT(*)::int AS total FROM usuarios WHERE email LIKE $1', [`%${EMAIL_SUFFIX}`]);
   assert.equal(leftovers.rows[0].total, 0, 'a transação de teste deveria ter sido desfeita');
+  // Fecha o pool para o processo de teste terminar.
   await pool.end();
 });
+
+/*
+ * ============================================================================
+ * RESUMO DO ARQUIVO
+ * ============================================================================
+ *
+ * COMO O FLUXO FUNCIONA:
+ *   1. Define a pasta temporária de fotos antes de carregar o app.
+ *   2. withRollback abre uma transação e redireciona o pool da aplicação para ela.
+ *   3. Cria usuários de teste e percorre, em subtestes, todos os módulos da API por
+ *      requisições HTTP reais (e alguns services diretamente).
+ *   4. A transação é desfeita; o teste confere que não sobrou nenhum dado.
+ *
+ * CONCEITOS IMPORTANTES PARA ESTUDAR:
+ *   - Testes de integração x testes unitários.
+ *   - Isolamento com transação desfeita (rollback) e domínio .invalid para e-mails.
+ *   - Subtestes (t.test) que compartilham estado em ordem.
+ *   - Upload multipart com FormData/Blob no Node.
+ *   - Testar integrações externas com gateway simulado e SQL real.
+ * ============================================================================
+ */

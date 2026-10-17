@@ -1,6 +1,29 @@
+/*
+ * ============================================================================
+ * ARQUIVO: story-repository.js
+ * ============================================================================
+ *
+ * PARA QUE SERVE:
+ *   REPOSITORY das HISTÓRIAS DE ADOÇÃO (tabela "historias"): lista e busca do
+ *   painel (com nomes do animal e do adotante vinculados), criar, editar,
+ *   excluir e a lista pública do site (só publicadas, sem dados do adotante).
+ *
+ * PRINCIPAIS ITENS:
+ *   - SELECT_STORY (SQL base), UPDATABLE_COLUMNS, buildWhere (interna).
+ *   - list, findById, create, update, remove, listPublished (exportadas).
+ *
+ * CONEXÕES COM OUTROS ARQUIVOS:
+ *   - db/pool e db/sql. Tabelas: historias, animais, adotantes.
+ *   - Usado por: ./story-service.js.
+ * ============================================================================
+ */
+
+// Pool de conexões.
 const pool = require('../../db/pool');
+// Montadores de SQL.
 const { buildUpdate, createWhere } = require('../../db/sql');
 
+// SQL base: história (h) + nome do animal (a) e do adotante (d), ambos opcionais (LEFT JOIN).
 const SELECT_STORY = `
   SELECT h.id, h.autor_nome, h.texto, h.foto_url, h.publicado, h.criado_em,
          h.animal_id, a.nome AS animal_nome, h.adotante_id, d.nome AS adotante_nome
@@ -8,8 +31,12 @@ const SELECT_STORY = `
   LEFT JOIN animais a ON a.id = h.animal_id
   LEFT JOIN adotantes d ON d.id = h.adotante_id`;
 
+// Colunas editáveis.
 const UPDATABLE_COLUMNS = new Set(['autor_nome', 'texto', 'foto_url', 'publicado', 'animal_id', 'adotante_id']);
 
+/*
+ * buildWhere (interna): busca (autor ou texto), publicada ou não, e animal.
+ */
 function buildWhere(filters) {
   const where = createWhere();
 
@@ -20,6 +47,9 @@ function buildWhere(filters) {
   return { clause: where.clause(), values: where.values };
 }
 
+/*
+ * list (async): total + página, ordenada pela data de criação.
+ */
 async function list(filters) {
   const { clause, values } = buildWhere(filters);
   const sortOrder = filters.order === 'asc' ? 'ASC' : 'DESC';
@@ -36,11 +66,17 @@ async function list(filters) {
   return { items: result.rows, total: countResult.rows[0].total };
 }
 
+/*
+ * findById (async): uma história ou null.
+ */
 async function findById(id) {
   const result = await pool.query(`${SELECT_STORY} WHERE h.id = $1`, [id]);
   return result.rows[0] || null;
 }
 
+/*
+ * create (async): insere e devolve a história completa.
+ */
 async function create(story) {
   const result = await pool.query(
     `INSERT INTO historias (autor_nome, texto, foto_url, publicado, animal_id, adotante_id)
@@ -51,6 +87,9 @@ async function create(story) {
   return findById(result.rows[0].id);
 }
 
+/*
+ * update (async): atualização parcial; devolve a história ou null (se não existir).
+ */
 async function update(id, changes) {
   const update = buildUpdate(changes, UPDATABLE_COLUMNS, id);
   if (!update) return findById(id);
@@ -59,11 +98,18 @@ async function update(id, changes) {
   return result.rowCount > 0 ? findById(id) : null;
 }
 
+/*
+ * remove (async): exclui; true se apagou.
+ */
 async function remove(id) {
   const result = await pool.query('DELETE FROM historias WHERE id = $1 RETURNING id', [id]);
   return result.rowCount > 0;
 }
 
+/*
+ * listPublished (async): histórias publicadas para o site, com dados básicos do animal.
+ * Repare que NÃO há JOIN com adotantes: o site não recebe dados do adotante.
+ */
 // Site público: só histórias publicadas e nenhum dado do adotante vinculado.
 async function listPublished(filters) {
   const countResult = await pool.query('SELECT COUNT(*)::int AS total FROM historias WHERE publicado = true');
@@ -80,4 +126,20 @@ async function listPublished(filters) {
   return { items: result.rows, total: countResult.rows[0].total };
 }
 
+// Exporta as funções.
 module.exports = { list, findById, create, update, remove, listPublished };
+
+/*
+ * ============================================================================
+ * RESUMO DO ARQUIVO
+ * ============================================================================
+ *
+ * COMO O FLUXO FUNCIONA:
+ *   Painel: list/findById/create/update/remove com SELECT_STORY. Site:
+ *   listPublished, com um SELECT próprio que só traz dados públicos.
+ *
+ * CONCEITOS IMPORTANTES PARA ESTUDAR:
+ *   - LEFT JOIN para vínculos opcionais.
+ *   - Consultas diferentes para públicos diferentes (painel x site).
+ * ============================================================================
+ */

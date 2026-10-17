@@ -1,45 +1,95 @@
+# ============================================================================
+# ARQUIVO: backend-ci.yml (GitHub Actions)
+# ============================================================================
+#
+# PARA QUE SERVE:
+#   INTEGRAÇÃO CONTÍNUA (CI): a cada push ou pull request, o GitHub cria uma
+#   máquina temporária, sobe um PostgreSQL de teste e executa, em ordem:
+#   instalação, auditoria de dependências, verificação de sintaxe, testes
+#   unitários, migrations, testes de integração e a construção da imagem Docker.
+#   Se qualquer passo falhar, o GitHub marca o commit com erro.
+#   Formato YAML: a indentação (espaços) define a estrutura; "#" inicia comentário.
+#
+# CONEXÕES COM OUTROS ARQUIVOS:
+#   - package.json (scripts test, db:migrate, test:integration), scripts/migrar.js,
+#     tests/, Dockerfile.
+# ============================================================================
+
+# Nome exibido na aba "Actions" do GitHub.
 name: API Patas em Casa
 
+# Quando rodar: em todo push e em todo pull request.
 on:
   push:
   pull_request:
 
 jobs:
+  # Um único "job" chamado testes.
   testes:
+    # Máquina virtual Ubuntu fornecida pelo GitHub.
     runs-on: ubuntu-latest
+    # Serviços auxiliares: um contêiner PostgreSQL 16 só para os testes.
     services:
       postgres:
         image: postgres:16
+        # Usuário, senha e banco do PostgreSQL de teste (descartável; não são segredos reais).
         env:
           POSTGRES_USER: patas
           POSTGRES_PASSWORD: patas
           POSTGRES_DB: patas_teste
+        # Expõe a porta 5432 do contêiner na máquina.
         ports:
           - 5432:5432
+        # Espera o banco ficar pronto (pg_isready) antes de seguir.
         options: >-
           --health-cmd "pg_isready -U patas"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    # Variáveis de ambiente para todos os passos: modo teste e endereço do banco do serviço acima.
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://patas:patas@localhost:5432/patas_teste?sslmode=disable
+    # Passos executados em ordem.
     steps:
+      # Baixa o código do repositório.
       - uses: actions/checkout@v4
+      # Instala o Node 24 e guarda em cache o que o npm baixar.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+      # Instala as dependências exatamente como no package-lock.
       - run: npm ci
+      # Falha se houver vulnerabilidade "alta" ou pior nas dependências de produção.
       - name: Auditoria de dependências
         run: npm audit --omit=dev --audit-level=high
+      # node --check confere a sintaxe de cada arquivo .js sem executá-lo.
       - name: Verificação de sintaxe
         run: find src scripts server.js -name '*.js' -exec node --check {} +
       - name: Testes unitários e HTTP
         run: npm test
+      # Cria as tabelas no banco de teste vazio (scripts/migrar.js).
       - name: Migrations no banco de teste
         run: npm run db:migrate
+      # Fluxos completos contra o banco real (tests/integration).
       - name: Testes de integração
         run: npm run test:integration
+      # Garante que a imagem Docker continua construindo.
       - name: Imagem Docker
         run: docker build -t patas-em-casa-api .
+
+# ============================================================================
+# RESUMO DO ARQUIVO
+# ============================================================================
+#
+# COMO O FLUXO FUNCIONA:
+#   push/PR → máquina Ubuntu + PostgreSQL de teste → npm ci → auditoria →
+#   sintaxe → testes unitários → migrations → testes de integração → docker build.
+#
+# CONCEITOS IMPORTANTES PARA ESTUDAR:
+#   - Integração contínua (CI) e GitHub Actions (workflow, job, steps, services).
+#   - YAML: indentação, listas ("- "), mapas e o bloco ">-" (texto em várias linhas).
+#   - Bancos descartáveis para testes e verificação de saúde de serviços.
+#   - npm ci x npm install e npm audit.
+# ============================================================================

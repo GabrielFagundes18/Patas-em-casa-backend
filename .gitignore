@@ -1,4 +1,20 @@
+# ============================================================================
+# ARQUIVO: .gitignore
+# ============================================================================
+#
+# PARA QUE SERVE:
+#   Diz ao Git quais arquivos e pastas NÃO devem ser versionados (enviados ao
+#   repositório): dependências, segredos, fotos enviadas, logs e arquivos
+#   temporários do sistema/editor.
+#   Formato: um padrão por linha; "/" no fim = pasta; "*" = qualquer texto;
+#   "!" no começo = exceção.
+#
+# CONEXÕES COM OUTROS ARQUIVOS:
+#   - .env.example (o único arquivo .env* que vai para o Git).
+# ============================================================================
+
 # Dependências
+# (recriadas com "npm install" a partir do package.json)
 node_modules/
 
 # Variáveis de ambiente: só o exemplo vai para o Git
@@ -24,3 +40,15 @@ Thumbs.db
 *.bak
 *.tmp
 *.old
+
+# ============================================================================
+# RESUMO DO ARQUIVO
+# ============================================================================
+#
+# COMO O FLUXO FUNCIONA:
+#   Ao rodar "git add", os caminhos que combinam com estes padrões são ignorados.
+#
+# CONCEITOS IMPORTANTES PARA ESTUDAR:
+#   - Por que não versionar node_modules, .env e arquivos gerados.
+#   - Padrões do .gitignore (curingas, pastas e exceções).
+# ============================================================================
