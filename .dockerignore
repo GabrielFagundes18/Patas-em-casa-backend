@@ -1,10 +1,43 @@
+# ============================================================================
+# ARQUIVO: .dockerignore
+# ============================================================================
+#
+# PARA QUE SERVE:
+#   Lista o que NÃO deve ser enviado ao Docker na construção da imagem (o
+#   "contexto"). Deixa a construção mais rápida, a imagem menor e evita que
+#   segredos (.env) acabem dentro da imagem.
+#   Formato: um padrão por linha; "!" no começo cria uma EXCEÇÃO à regra anterior.
+#
+# CONEXÕES COM OUTROS ARQUIVOS:
+#   - Dockerfile (a construção que usa este filtro).
+# ============================================================================
+
+# Dependências: são instaladas dentro da imagem (npm ci), não copiadas da máquina.
 node_modules
+# Segredos: nunca entram na imagem.
 .env
 .env.*
+# ...exceto o exemplo, que não tem segredos.
 !.env.example
+# Histórico do Git e configurações do GitHub.
 .git
 .github
+# Testes, documentação e migrations não são necessários para rodar a API.
 tests
 docs
 migrations
 README.md
+
+# ============================================================================
+# RESUMO DO ARQUIVO
+# ============================================================================
+#
+# COMO O FLUXO FUNCIONA:
+#   Ao rodar "docker build", o Docker ignora os caminhos acima antes de copiar
+#   arquivos para a construção.
+#
+# CONCEITOS IMPORTANTES PARA ESTUDAR:
+#   - Contexto de build do Docker.
+#   - Não colocar segredos em imagens.
+#   - Padrões de exclusão e exceções com "!".
+# ============================================================================

@@ -1,26 +1,68 @@
+/*
+ * ============================================================================
+ * ARQUIVO: adoption-triage-service.test.js
+ * ============================================================================
+ *
+ * PARA QUE SERVE:
+ *   TESTES da TRIAGEM DE PEDIDOS DE ADOÇÃO (adoption-triage-service), com um
+ *   "banco" completo em memória (animal, dois adotantes, dois pedidos, usuários
+ *   e agenda). Cobre: aprovação (e reprovação automática dos outros pedidos),
+ *   reprovação, edição de pedidos decididos, responsável, termo assinado,
+ *   agendamento (com e-mail, sem SMTP, com falha de SMTP), datas no passado,
+ *   conflitos de horário, remarcação, cancelamento/conclusão de compromissos e
+ *   e-mail de decisão sem expor a justificativa interna.
+ *
+ * PRINCIPAIS ITENS:
+ *   - OPEN (status em aberto) e actor (quem age nos testes).
+ *   - setup({ animalStatus, mailer }): monta o banco em memória e o service.
+ *   - 14 testes.
+ *
+ * CONEXÕES COM OUTROS ARQUIVOS:
+ *   - src/modules/adoptions/adoption-triage-service.js (e, indiretamente, brasilia-time,
+ *     masking e adoption-emails, que o service usa de verdade).
+ * ============================================================================
+ */
+
+// Verificações.
 const assert = require('node:assert/strict');
+// Executor de testes.
 const test = require('node:test');
+// Fábrica do service.
 const { createAdoptionTriageService } = require('../../src/modules/adoptions/adoption-triage-service');
 
+// Status "em aberto" (mesma lista do domain-values).
 const OPEN = ['novo', 'em_analise', 'visita_agendada'];
+// Membro da equipe que faz as ações nos testes.
 const actor = { userId: '11111111-1111-4111-8111-111111111111', role: 'gestor_animais', name: 'Carla' };
 
+/*
+ * FUNÇÃO: setup
+ * O que faz: cria o "banco" em memória (Maps) e o service com dublês de repository, agenda,
+ *   auditoria, transação, relógio fixo (04/10/2026 15:00 UTC = 12:00 em Brasília) e mailer.
+ * Parâmetros: { animalStatus (padrão 'em_processo'), mailer (padrão: SMTP não configurado) }.
+ * Retorno: { service, animals, adopters, requests, audits, appointments }.
+ */
 // Banco em memória com dois candidatos para o mesmo animal.
 function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => false, send: async () => {} } } = {}) {
+  // Um animal.
   const animals = new Map([['animal-1', { id: 'animal-1', nome: 'Nino', especie: 'cachorro', status: animalStatus, foto_url: null }]]);
+  // Dois adotantes.
   const adopters = new Map([
     ['adotante-1', { id: 'adotante-1', nome: 'Ana', email: 'ana@example.org', telefone: '(11) 98888-7777', cidade: 'Campinas', estado: 'SP', status: 'em_analise' }],
     ['adotante-2', { id: 'adotante-2', nome: 'Bia', email: 'bia@example.org', telefone: null, cidade: 'Santos', estado: 'SP', status: 'em_analise' }],
   ]);
+  // Dois pedidos para o mesmo animal.
   const requests = new Map([
     ['pedido-1', { id: 'pedido-1', animal_id: 'animal-1', adotante_id: 'adotante-1', status: 'em_analise', prioridade: 'medio', observacoes: 'Telefone informado: (11) 98888-7777', responsavel_id: null, termo_assinado: false, termo_assinado_em: null }],
     ['pedido-2', { id: 'pedido-2', animal_id: 'animal-1', adotante_id: 'adotante-2', status: 'novo', prioridade: 'alto', observacoes: null, responsavel_id: null, termo_assinado: false, termo_assinado_em: null }],
   ]);
+  // Usuários: um gestor (pode ser responsável) e um voluntário (não pode).
   const users = new Map([
     ['22222222-2222-4222-8222-222222222222', { id: '22222222-2222-4222-8222-222222222222', nome: 'Gestor', cargo: 'gestor_animais' }],
     ['44444444-4444-4444-8444-444444444444', { id: '44444444-4444-4444-8444-444444444444', nome: 'Voluntário', cargo: 'voluntariado' }],
   ]);
 
+  // Monta a "linha achatada" que o SQL real devolveria (pedido + animal + adotante + responsável).
   const toRow = (request) => {
     const animal = animals.get(request.animal_id);
     const adopter = adopters.get(request.adotante_id);
@@ -42,6 +84,7 @@ function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => fa
     };
   };
 
+  // Repository da triagem em memória (mesma interface do adoption-triage-repository).
   const repository = {
     findById: async (db, id) => (requests.has(id) ? toRow(requests.get(id)) : null),
     update: async (db, id, changes) => Object.assign(requests.get(id), changes),
@@ -59,10 +102,13 @@ function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => fa
   // Agenda em memória com a mesma regra de sobreposição do SQL (mesmo responsável, intervalos que se cruzam).
   const appointmentRows = new Map();
   let appointmentSeq = 0;
+  // Acrescenta o nome do responsável (busca nos usuários ou, se for o próprio actor, usa o nome dele).
   const withNames = (row) => ({ ...row, responsavel_nome: users.get(row.responsavel_id)?.nome ?? (row.responsavel_id === actor.userId ? actor.name : null) });
   const appointments = {
     rows: appointmentRows,
     lockSchedule: async () => {},
+    // Conflito: agendado, mesmo responsável, outro compromisso, e os intervalos se cruzam
+    // (início existente < fim novo E fim existente > início novo). 60000 ms = 1 minuto.
     findConflicts: async (db, { responsavelId, inicio, duracaoMinutos, excludeId }) => [...appointmentRows.values()]
       .filter((row) => row.status === 'agendado' && row.responsavel_id === responsavelId && row.id !== excludeId
         && row.previsto_em < new Date(inicio.getTime() + duracaoMinutos * 60000)
@@ -91,10 +137,12 @@ function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => fa
     },
   };
 
+  // Eventos de auditoria gravados.
   const audits = [];
   const service = createAdoptionTriageService(repository, {
     audit: { record: async (event) => audits.push(event) },
     transaction: (work) => work('tx'),
+    // Relógio fixo: 04/10/2026 15:00 UTC (12:00 em Brasília).
     now: () => new Date('2026-10-04T15:00:00.000Z'),
     mailer,
     log: { error: () => {} },
@@ -104,6 +152,8 @@ function setup({ animalStatus = 'em_processo', mailer = { isConfigured: () => fa
   return { service, animals, adopters, requests, audits, appointments };
 }
 
+// Teste 1: aprovar → animal adotado, adotante "adotante", o outro pedido reprovado automaticamente (e
+// o outro adotante liberado), anotações e auditorias certas; a resposta continua mascarada.
 test('approving a request adopts the animal and auto-rejects the other open requests', async () => {
   const { service, animals, adopters, requests, audits } = setup();
 
@@ -121,11 +171,13 @@ test('approving a request adopts the animal and auto-rejects the other open requ
   assert.equal(result.adotante.email, 'an***@example.org');
 });
 
+// Teste 2: animal já adotado → 409.
 test('approval is refused when the animal was already adopted', async () => {
   const { service } = setup({ animalStatus: 'adotado' });
   await assert.rejects(service.approve('pedido-1', { justificativa: 'Justificativa suficiente.' }, actor), { status: 409, code: 'ANIMAL_JA_ADOTADO' });
 });
 
+// Teste 3: reprovar um pedido com outro ainda aberto mantém "em_processo"; reprovar o último libera o animal.
 test('rejecting the last open request releases the animal', async () => {
   const { service, animals } = setup();
 
@@ -136,6 +188,7 @@ test('rejecting the last open request releases the animal', async () => {
   assert.equal(animals.get('animal-1').status, 'disponivel');
 });
 
+// Teste 4: mover para visita atualiza o adotante; depois de aprovado, só anotações são aceitas.
 test('decided requests accept only notes, and moving to a visit updates the adopter', async () => {
   const { service, adopters, requests } = setup();
 
@@ -149,6 +202,7 @@ test('decided requests accept only notes, and moving to a visit updates the adop
   assert.match(requests.get('pedido-1').observacoes, /Retorno pós-adoção: tudo bem\./);
 });
 
+// Teste 5: voluntário não pode ser responsável (422); gestor pode.
 test('only active team members with adoption access can be responsible', async () => {
   const { service, requests } = setup();
 
@@ -162,6 +216,7 @@ test('only active team members with adoption access can be responsible', async (
   assert.equal(requests.get('pedido-1').responsavel_id, '22222222-2222-4222-8222-222222222222');
 });
 
+// Teste 6: termo só depois de aprovado e só uma vez (grava a data como Date).
 test('the adoption term can be signed only once and only after approval', async () => {
   const { service, requests } = setup();
 
@@ -174,6 +229,8 @@ test('the adoption term can be signed only once and only after approval', async 
   await assert.rejects(service.markTermSigned('pedido-1', actor), { status: 409, code: 'TERMO_JA_ASSINADO' });
 });
 
+// Teste 7: agendar visita com e-mail → etapa e adotante atualizados, anotações (do usuário e do
+// sistema), auditoria e e-mail com textos certos e HTML escapado ("<b>" vira "&lt;b&gt;").
 test('scheduling a visit moves the request, records it in the history and emails the adopter', async () => {
   const sent = [];
   const mailer = { isConfigured: () => true, send: async (message) => sent.push(message) };
@@ -202,6 +259,8 @@ test('scheduling a visit moves the request, records it in the history and emails
   assert.match(sent[0].html, /Rua das Flores, 10 &lt;b&gt;/);
 });
 
+// Teste 8: entrevista tira o pedido de "novo" (vai para em_analise); sem SMTP, o agendamento fica salvo
+// e o motivo do não envio é anotado.
 test('an interview leaves "novo" for analysis, and a missing SMTP keeps the schedule saved', async () => {
   const { service, requests, adopters } = setup();
 
@@ -215,6 +274,7 @@ test('an interview leaves "novo" for analysis, and a missing SMTP keeps the sche
   assert.match(requests.get('pedido-2').observacoes, /E-mail com o agendamento não enviado\./);
 });
 
+// Teste 9: servidor de e-mail falhando não desfaz o agendamento; sem enviar_email, nada é enviado nem anotado.
 test('a failing mail server does not undo the schedule, and nothing is sent when not asked', async () => {
   const failing = { isConfigured: () => true, send: async () => { throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }); } };
   const { service, requests } = setup({ mailer: failing });
@@ -228,6 +288,7 @@ test('a failing mail server does not undo the schedule, and nothing is sent when
   assert.doesNotMatch(requests.get('pedido-2').observacoes, /E-mail/);
 });
 
+// Teste 10: 11:59 de Brasília no dia 04/10 é antes do "agora" (12:00) → 422; pedido reprovado → 409.
 test('schedules must be in the future and only for open requests', async () => {
   const { service } = setup();
 
@@ -242,6 +303,8 @@ test('schedules must be in the future and only for open requests', async () => {
   );
 });
 
+// Teste 11: a mesma pessoa não pode ter compromissos sobrepostos (14:00–15:00 x 14:30); 15:00 em
+// diante pode; outra pessoa pode no mesmo horário.
 test('the same person cannot have two overlapping appointments, but back-to-back slots are fine', async () => {
   const { service } = setup();
 
@@ -262,6 +325,8 @@ test('the same person cannot have two overlapping appointments, but back-to-back
   assert.equal(otherPerson.agendamento.responsavel.nome, 'Gestor');
 });
 
+// Teste 12: remarcar confere conflito de novo (ignorando o próprio horário), mantém o local, envia
+// e-mail e anota "de → para"; compromisso de outro pedido → 404.
 test('rescheduling checks conflicts again, keeps the slot itself and emails the new time', async () => {
   const sent = [];
   const { service, requests } = setup({ mailer: { isConfigured: () => true, send: async (message) => sent.push(message) } });
@@ -283,6 +348,8 @@ test('rescheduling checks conflicts again, keeps the slot itself and emails the 
   await assert.rejects(service.reschedule('pedido-2', agendamento.id, { data_hora: '2026-10-12T10:00' }, actor), { status: 404 });
 });
 
+// Teste 13: cancelar a única visita volta pedido e adotante para em_analise (cancelar de novo → erro);
+// concluir uma entrevista marca "realizado".
 test('cancelling the only visit sends the request back to analysis; done appointments are closed', async () => {
   const { service, requests, adopters } = setup();
   const visit = await service.schedule('pedido-1', { tipo: 'visita', data_hora: '2026-10-10T14:00' }, actor);
@@ -300,6 +367,8 @@ test('cancelling the only visit sends the request back to analysis; done appoint
   assert.equal(done.pedido.agendamentos.find((item) => item.id === interview.agendamento.id).status, 'realizado');
 });
 
+// Teste 14: reprovar com notificação envia só a mensagem ao adotante (sem a justificativa interna) e
+// cancela a agenda; aprovar sem notificar não envia e-mail.
 test('decisions can notify the adopter without exposing the internal justification', async () => {
   const sent = [];
   const { service, appointments } = setup({ mailer: { isConfigured: () => true, send: async (message) => sent.push(message) } });
@@ -322,3 +391,22 @@ test('decisions can notify the adopter without exposing the internal justificati
   assert.equal(approved.email, null);
   assert.equal(sent.length, 1);
 });
+
+/*
+ * ============================================================================
+ * RESUMO DO ARQUIVO
+ * ============================================================================
+ *
+ * COMO O FLUXO FUNCIONA:
+ *   setup() cria um mundo pequeno e controlado (1 animal, 2 adotantes, 2 pedidos,
+ *   agenda vazia, relógio fixo). Cada teste executa ações da triagem e confere o
+ *   estado resultante em todas as "tabelas" em memória, as anotações, a auditoria
+ *   e os e-mails.
+ *
+ * CONCEITOS IMPORTANTES PARA ESTUDAR:
+ *   - Fakes que reproduzem a regra do SQL (ex.: sobreposição de horários) em JavaScript.
+ *   - Relógio fixo para testar regras de "data no futuro".
+ *   - Testar efeitos colaterais e consistência entre várias entidades.
+ *   - Regex com caracteres escapados (\. \( \/) para conferir textos.
+ * ============================================================================
+ */

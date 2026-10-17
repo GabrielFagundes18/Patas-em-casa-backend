@@ -1,10 +1,38 @@
+/*
+ * ============================================================================
+ * ARQUIVO: sessions-and-reset.test.js
+ * ============================================================================
+ *
+ * PARA QUE SERVE:
+ *   TESTES das SESSÕES e da REDEFINIÇÃO DE SENHA: logout revoga a sessão,
+ *   trocar a própria senha mantém só a sessão atual, "esqueci minha senha"
+ *   responde igual para qualquer e-mail, link de redefinição é de uso único e
+ *   derruba todas as sessões, links guardam só o hash do token e, sem SMTP,
+ *   nenhum link é criado.
+ *
+ * PRINCIPAIS ITENS:
+ *   - user: membro de exemplo (gestor da ONG).
+ *   - setupAuth({ accessLinks, users }): auth-service com dublês.
+ *   - 6 testes.
+ *
+ * CONEXÕES COM OUTROS ARQUIVOS:
+ *   - src/modules/auth: auth-service, access-link-service, login-throttle.
+ *   - tests/helpers/fake-sessions.js.
+ * ============================================================================
+ */
+
+// Verificações.
 const assert = require('node:assert/strict');
+// Executor de testes.
 const test = require('node:test');
+// Itens testados.
 const { createAuthService } = require('../../src/modules/auth/auth-service');
 const { createAccessLinkService, hashToken } = require('../../src/modules/auth/access-link-service');
 const { createLoginThrottle } = require('../../src/modules/auth/login-throttle');
+// Sessões em memória.
 const { createFakeSessions } = require('../helpers/fake-sessions');
 
+// Membro de exemplo.
 const user = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   nome: 'Carla Lima',
@@ -14,6 +42,13 @@ const user = {
   ativo: true,
 };
 
+/*
+ * FUNÇÃO: setupAuth
+ * O que faz: cria o auth-service com repository em memória, senha atual "SenhaAtual123",
+ *   hash falso ("hash:<senha>"), sessões em memória e transação falsa.
+ * Parâmetros: { accessLinks (dublê de links), users (mapa id → usuário) }.
+ * Retorno: { service, sessions, passwords (senhas gravadas) }.
+ */
 function setupAuth({ accessLinks, users = { [user.id]: user } } = {}) {
   const sessions = createFakeSessions();
   const passwords = [];
@@ -35,6 +70,7 @@ function setupAuth({ accessLinks, users = { [user.id]: user } } = {}) {
   return { service, sessions, passwords };
 }
 
+// Teste 1: login registra o navegador; refresh funciona; após logout, o refresh falha; logout com lixo não dá erro.
 test('logout revokes the session in the database, so the refresh cookie stops working', async () => {
   const { service, sessions } = setupAuth();
   const session = await service.login({ email: user.email, password: 'SenhaAtual123' }, { userAgent: 'Firefox' });
@@ -47,10 +83,12 @@ test('logout revokes the session in the database, so the refresh cookie stops wo
   await service.logout('cookie-invalido');
 });
 
+// Teste 2: trocar a própria senha mantém a sessão atual e derruba a outra.
 test('changing the own password keeps the current session and ends the others', async () => {
   const { service, sessions } = setupAuth();
   const current = await service.login({ email: user.email, password: 'SenhaAtual123' });
   const other = await service.login({ email: user.email, password: 'SenhaAtual123' });
+  // Id da primeira sessão criada (a "atual").
   const currentId = [...sessions.rows.keys()][0];
 
   await service.changeOwnPassword(user.id, { senha_atual: 'SenhaAtual123', nova_senha: 'NovaSenha2026' }, { sessionId: currentId });
@@ -59,6 +97,7 @@ test('changing the own password keeps the current session and ends the others', 
   await assert.rejects(service.refresh(other.refreshToken), { code: 'SESSAO_EXPIRADA' });
 });
 
+// Teste 3: "esqueci a senha" devolve sempre undefined; só a conta ativa recebe o e-mail.
 test('forgot password answers the same way for unknown, inactive and active accounts', async () => {
   const sent = [];
   const inactive = { ...user, id: '660e8400-e29b-41d4-a716-446655440000', email: 'off@example.org', ativo: false };
@@ -70,15 +109,18 @@ test('forgot password answers the same way for unknown, inactive and active acco
   assert.equal(await service.requestPasswordReset({ email: 'ninguem@example.org' }), undefined);
   assert.equal(await service.requestPasswordReset({ email: 'off@example.org' }), undefined);
   assert.equal(await service.requestPasswordReset({ email: ' CARLA@example.org ' }), undefined);
+  // O envio acontece em segundo plano: setImmediate espera o "próximo ciclo" para ele terminar.
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(sent, [{ email: user.email, finalidade: 'redefinicao' }]);
 });
 
+// Teste 4: senha fraca → 422; link válido define a senha uma vez e derruba as sessões; reutilizar → 400.
 test('a reset link sets the password once, ends every session and rejects weak passwords', async () => {
   let valid = true;
   const { service, sessions, passwords } = setupAuth({
     accessLinks: {
+      // O token só vale uma vez: na 1ª chamada válida, "valid" vira false.
       consume: async (db, token) => (token === 'token-valido-de-teste-123' && valid
         ? (valid = false, { usuario_id: user.id, email: user.email, finalidade: 'redefinicao' })
         : null),
@@ -96,10 +138,12 @@ test('a reset link sets the password once, ends every session and rejects weak p
   assert.equal(sessions.rows.size, 1);
 });
 
+// Teste 5: o access-link-service guarda só o hash, invalida links antigos e aponta para a página do site.
 test('access links store only the token hash, invalidate older links and point to the site', async () => {
   const stored = [];
   const messages = [];
   const links = createAccessLinkService({
+    // Repository em memória.
     repository: {
       invalidatePending: async (db, id) => stored.forEach((row) => { if (row.usuarioId === id) row.used = true; }),
       create: async (db, row) => stored.push({ ...row, used: false }),
@@ -113,6 +157,7 @@ test('access links store only the token hash, invalidate older links and point t
     log: { error: () => {} },
   });
 
+  // Convite: e-mail enviado; a URL tem o caminho certo e convite=1.
   assert.deepEqual(await links.send(user, 'convite'), { enviado: true });
   const url = new URL(messages[0].text.match(/https:\/\/patas\.example\S+/)[0]);
   const token = url.searchParams.get('token');
@@ -121,9 +166,11 @@ test('access links store only the token hash, invalidate older links and point t
   assert.equal(url.searchParams.get('convite'), '1');
   assert.match(messages[0].subject, /Convite/);
   assert.match(messages[0].text, /Gestor da ONG/);
+  // O banco guardou o hash do token — e o token em si não aparece em lugar nenhum do que foi guardado.
   assert.ok(stored[0].tokenHash.equals(hashToken(token)));
   assert.equal(JSON.stringify(stored).includes(token), false);
 
+  // Novo link (redefinição) invalida o convite; o novo só pode ser usado uma vez.
   await links.send(user, 'redefinicao');
   assert.equal(await links.consume('tx', token), null);
   const latest = new URL(messages[1].text.match(/https:\/\/patas\.example\S+/)[0]).searchParams.get('token');
@@ -131,6 +178,7 @@ test('access links store only the token hash, invalidate older links and point t
   assert.equal(await links.consume('tx', latest), null);
 });
 
+// Teste 6: sem SMTP, nenhum link é criado (assert.fail quebraria o teste se fosse chamado) e o motivo é devolvido.
 test('without SMTP, access links are not created and the reason is returned', async () => {
   const links = createAccessLinkService({
     repository: { invalidatePending: async () => assert.fail('não deveria criar link'), create: async () => assert.fail() },
@@ -139,3 +187,21 @@ test('without SMTP, access links are not created and the reason is returned', as
   });
   assert.deepEqual(await links.send(user, 'convite'), { enviado: false, motivo: 'O envio de e-mails não está configurado no servidor (SMTP).' });
 });
+
+/*
+ * ============================================================================
+ * RESUMO DO ARQUIVO
+ * ============================================================================
+ *
+ * COMO O FLUXO FUNCIONA:
+ *   setupAuth() monta o auth-service com sessões e dados em memória; os testes
+ *   percorrem login → refresh → logout, troca de senha, "esqueci a senha" e
+ *   links de acesso (com repository e mailer falsos).
+ *
+ * CONCEITOS IMPORTANTES PARA ESTUDAR:
+ *   - Revogação de sessões e tokens de uso único.
+ *   - Testar código que roda em segundo plano (setImmediate).
+ *   - assert.fail para garantir que algo NÃO seja chamado.
+ *   - Buffer.equals para comparar hashes.
+ * ============================================================================
+ */
